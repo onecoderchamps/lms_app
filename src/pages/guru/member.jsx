@@ -1,317 +1,290 @@
+import React, { useState, useEffect } from 'react';
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  getDocs,
+  query,
+  where,
+  doc,
+  deleteDoc,
+} from 'firebase/firestore';
+import { app } from '../../api/firebaseConfig';
+import MainLayout from './layouts/MainLayout';
 
-import { useState, useEffect } from 'react'; 
-import MainLayout from "./layouts/MainLayout";
-import { PlusCircle, X, Edit, Trash2 } from 'lucide-react';
+const db = getFirestore(app);
 
-export default function MemberPage() {
+const MemberPage = () => {
+  const [emailToAdd, setEmailToAdd] = useState('');
+  const [emailValid, setEmailValid] = useState(null);
+  const [userUid, setUserUid] = useState('');
+  const [userFullName, setUserFullName] = useState('');
+  const [checkingEmail, setCheckingEmail] = useState(false);
   const [showAddMuridModal, setShowAddMuridModal] = useState(false);
-  const [muridName, setMuridName] = useState('');
-  const [muridEmail, setMuridEmail] = useState('');
-  const [muridPassword, setMuridPassword] = useState('');
+  const [murids, setMurids] = useState([]);
+  const [loadingMurids, setLoadingMurids] = useState(false);
 
-  const [murids, setMurids] = useState([
-    { id: 101, name: 'Budi Santoso', email: 'budi@example.com', password: 'passmurid1' },
-    { id: 102, name: 'Siti Aminah', email: 'siti@example.com', password: 'passmurid2' },
-    { id: 103, name: 'Agus Salim', email: 'agus@example.com', password: 'passmurid3' },
-  ]);
+  // Baru: state modal konfirmasi hapus
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [muridToDelete, setMuridToDelete] = useState(null);
 
-  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
-  const [muridToDeleteId, setMuridToDeleteId] = useState(null);
+  const primaryButtonColor = 'bg-blue-600 hover:bg-blue-700';
+  const primaryButtonTextColor = 'text-white';
 
-  const [showAlertModal, setShowAlertModal] = useState(false);
-  const [alertMessage, setAlertMessage] = useState('');
-  const [alertType, setAlertType] = useState('success');
-
-  const [showEditMuridModal, setShowEditMuridModal] = useState(false);
-  const [editingMuridId, setEditingMuridId] = useState(null);
-  const [editedMuridName, setEditedMuridName] = useState('');
-  const [editedMuridEmail, setEditedMuridEmail] = useState('');
-  const [editedMuridPassword, setEditedMuridPassword] = useState('');
-
-  const showCustomAlert = (message, type) => {
-    setAlertMessage(message);
-    setAlertType(type);
-    setShowAlertModal(true);
+  const showCustomAlert = (msg, type) => {
+    alert(`${type.toUpperCase()}: ${msg}`);
   };
 
-  const handleAddMurid = (e) => {
-    e.preventDefault();
-    if (!muridName.trim() || !muridEmail.trim() || !muridPassword.trim()) {
-      showCustomAlert('Nama, Email, dan Password tidak boleh kosong!', 'error');
-      return;
+  const idKelas = typeof window !== 'undefined' ? localStorage.getItem('idKelas') : null;
+
+  const fetchMurids = async () => {
+    if (!idKelas) return;
+    setLoadingMurids(true);
+    try {
+      const muridsQuery = query(
+        collection(db, 'murids'),
+        where('idKelas', '==', idKelas)
+      );
+      const querySnapshot = await getDocs(muridsQuery);
+      const muridList = querySnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      setMurids(muridList);
+    } catch (err) {
+      console.error('Gagal mengambil data murid:', err);
+    } finally {
+      setLoadingMurids(false);
     }
-    const newMurid = {
-      id: Date.now(), name: muridName, email: muridEmail, password: muridPassword,
-    };
-    setMurids((prevMurids) => [newMurid, ...prevMurids]);
-    setMuridName(''); setMuridEmail(''); setMuridPassword('');
-    setShowAddMuridModal(false);
-    showCustomAlert('Murid berhasil ditambahkan!', 'success');
   };
 
-  const confirmDeleteMurid = (id) => {
-    setMuridToDeleteId(id);
-    setShowDeleteConfirmModal(true);
+  useEffect(() => {
+    fetchMurids();
+  }, [idKelas]);
+
+  const checkEmailExists = async (email) => {
+    setCheckingEmail(true);
+    try {
+      const usersQuery = query(collection(db, 'users'), where('email', '==', email));
+      const querySnapshot = await getDocs(usersQuery);
+      if (!querySnapshot.empty) {
+        const userData = querySnapshot.docs[0].data();
+        setUserUid(querySnapshot.docs[0].id);
+        setUserFullName(userData.namaLengkap || '');
+        setEmailValid(true);
+      } else {
+        setEmailValid(false);
+        setUserUid('');
+        setUserFullName('');
+      }
+    } catch (err) {
+      console.error('Gagal cek email:', err);
+      setEmailValid(false);
+    } finally {
+      setCheckingEmail(false);
+    }
   };
 
-  const handleDeleteMurid = () => {
-    if (muridToDeleteId !== null) {
-      setMurids((prevMurids) => prevMurids.filter((murid) => murid.id !== muridToDeleteId));
+  const handleAddMuridToKelas = async (e) => {
+    e.preventDefault();
+    if (!emailValid || !idKelas || !userUid) return;
+
+    try {
+      await addDoc(collection(db, 'murids'), {
+        idKelas,
+        email: emailToAdd,
+        namaLengkap: userFullName,
+        idUser: userUid,
+      });
+      showCustomAlert('Murid berhasil ditambahkan!', 'success');
+      setShowAddMuridModal(false);
+      setEmailToAdd('');
+      setEmailValid(null);
+      fetchMurids();
+    } catch (err) {
+      showCustomAlert('Gagal menambahkan murid!', 'error');
+      console.error(err);
+    }
+  };
+
+  // Fungsi untuk buka modal hapus
+  const openDeleteModal = (murid) => {
+    setMuridToDelete(murid);
+    setShowDeleteModal(true);
+  };
+
+  // Fungsi hapus murid dari firestore
+  const handleDeleteMurid = async () => {
+    if (!muridToDelete) return;
+    try {
+      await deleteDoc(doc(db, 'murids', muridToDelete.id));
       showCustomAlert('Murid berhasil dihapus!', 'success');
-      setMuridToDeleteId(null);
-      setShowDeleteConfirmModal(false);
+      setShowDeleteModal(false);
+      setMuridToDelete(null);
+      fetchMurids();
+    } catch (err) {
+      showCustomAlert('Gagal menghapus murid!', 'error');
+      console.error(err);
     }
   };
-
-  const handleEditMurid = (murid) => {
-    setEditingMuridId(murid.id);
-    setEditedMuridName(murid.name);
-    setEditedMuridEmail(murid.email);
-    setEditedMuridPassword(murid.password); // Mengisi password lama sebagai default di form edit
-    setShowEditMuridModal(true);
-  };
-
-  const handleSaveEdit = (e) => {
-    e.preventDefault();
-    if (!editedMuridName.trim() || !editedMuridEmail.trim()) { 
-      showCustomAlert('Nama dan Email tidak boleh kosong!', 'error');
-      return;
-    }
-    setMurids((prevMurids) =>
-      prevMurids.map((murid) =>
-        murid.id === editingMuridId
-          ? {
-              ...murid,
-              name: editedMuridName,
-              email: editedMuridEmail,
-              password: editedMuridPassword.trim() !== '' ? editedMuridPassword : murid.password,
-            }
-          : murid
-      )
-    );
-    showCustomAlert('Perubahan murid berhasil disimpan!', 'success');
-    handleCancelEdit();
-  };
-
-  const handleCancelEdit = () => {
-    setEditingMuridId(null);
-    // Reset field form edit bisa dilakukan di sini atau saat membuka modal edit
-    // setEditedMuridName(''); setEditedMuridEmail(''); setEditedMuridPassword('');
-    setShowEditMuridModal(false);
-  };
-
-  const primaryButtonColor = "bg-orange-500 hover:bg-orange-600 focus:ring-orange-500";
-  const primaryButtonTextColor = "text-white";
-  const inputFocusColor = "focus:ring-orange-500 focus:border-orange-500";
-
-  // Helper function untuk merender field form (digunakan oleh modal Tambah & Edit)
-  const renderMuridFormFields = (isEditMode) => {
-    const nameVal = isEditMode ? editedMuridName : muridName;
-    const setName = isEditMode ? setEditedMuridName : setMuridName;
-    const emailVal = isEditMode ? editedMuridEmail : muridEmail;
-    const setEmail = isEditMode ? setEditedMuridEmail : setMuridEmail;
-    const passwordVal = isEditMode ? editedMuridPassword : muridPassword;
-    const setPassword = isEditMode ? setEditedMuridPassword : setMuridPassword;
-    const idPrefix = isEditMode ? "edited" : "";
-    const passwordPlaceholder = isEditMode ? "Kosongkan jika tidak ingin mengubah" : "Minimal 6 karakter";
-    const passwordRequired = !isEditMode; // Password wajib untuk tambah, opsional untuk edit
-
-    return (
-      <>
-        <div>
-          <label htmlFor={`${idPrefix}MuridName`} className="block text-sm font-medium text-gray-700 mb-1">Nama Murid</label>
-          <input type="text" id={`${idPrefix}MuridName`} placeholder="Contoh: Joko Susanto" value={nameVal}
-            onChange={(e) => setName(e.target.value)}
-            className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition duration-150`} required />
-        </div>
-        <div>
-          <label htmlFor={`${idPrefix}MuridEmail`} className="block text-sm font-medium text-gray-700 mb-1">Email Murid</label>
-          <input type="email" id={`${idPrefix}MuridEmail`} placeholder="Contoh: joko@example.com" value={emailVal}
-            onChange={(e) => setEmail(e.target.value)}
-            className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition duration-150`} required />
-        </div>
-        <div>
-          <label htmlFor={`${idPrefix}MuridPassword`} className="block text-sm font-medium text-gray-700 mb-1">
-            {isEditMode ? "Password Baru (Opsional)" : "Password"}
-          </label>
-          <input type="password" id={`${idPrefix}MuridPassword`} placeholder={passwordPlaceholder} value={passwordVal}
-            onChange={(e) => setPassword(e.target.value)}
-            className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition duration-150`}
-            required={passwordRequired} 
-          />
-        </div>
-      </>
-    );
-  };
-
 
   return (
     <MainLayout>
-      <main className="flex-1 md:ml-64 md:pt-16 p-4 md:p-6 lg:p-8 bg-gradient-to-br from-slate-50 to-gray-100 min-h-screen mt-15">
-        <div className="max-w-full mx-auto bg-white rounded-xl shadow-xl p-6 md:p-8">
-          <div className="flex flex-col md:flex-row justify-between md:items-center mb-8 gap-4">
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Manajemen Murid</h1>
-            <button
-              onClick={() => {
-                setMuridName(''); setMuridEmail(''); setMuridPassword(''); // Reset form tambah
-                setShowAddMuridModal(true);
-              }}
-              className={`flex items-center space-x-2 ${primaryButtonColor} ${primaryButtonTextColor} px-5 py-2.5 rounded-lg shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 transition duration-300 text-sm font-medium`}
-            >
-              <PlusCircle size={20} />
-              <span>Tambah Murid Baru</span>
-            </button>
-          </div>
+      <div className="flex-1 md:ml-64 md:pt-16 p-4 md:p-6 lg:p-8 bg-gradient-to-br from-slate-50 to-gray-100 min-h-screen mt-15">
+        <button
+          onClick={() => setShowAddMuridModal(true)}
+          className={`${primaryButtonColor} ${primaryButtonTextColor} px-4 py-2 rounded-md mb-6`}
+        >
+          Tambah Murid
+        </button>
 
-          {murids.length === 0 ? (
-            <div className="text-center py-16 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
-              <p className="text-xl font-medium text-gray-500">Belum ada murid.</p>
-              <p className="text-sm text-gray-400 mt-2">Klik "Tambah Murid Baru" untuk memulai.</p>
-            </div>
+        {/* List Murid dalam Table */}
+        <div className="bg-white shadow rounded-lg p-4 overflow-x-auto">
+          <h3 className="text-lg font-semibold mb-4">Daftar Murid</h3>
+          {loadingMurids ? (
+            <p>Memuat data murid...</p>
+          ) : murids.length === 0 ? (
+            <p className="text-gray-500">Belum ada murid yang ditambahkan.</p>
           ) : (
-            <div className="overflow-x-auto mt-6 border border-gray-200 rounded-lg shadow-sm">
-              <table className="min-w-full bg-white">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="py-3.5 px-4 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">ID</th>
-                    <th className="py-3.5 px-4 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Nama</th>
-                    <th className="py-3.5 px-4 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Email</th>
-                    <th className="py-3.5 px-4 text-left text-xs font-medium text-gray-600 uppercase tracking-wider hidden md:table-cell">Password (Demo)</th>
-                    <th className="py-3.5 px-4 text-center text-xs font-medium text-gray-600 uppercase tracking-wider">Aksi</th>
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Nama Lengkap
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Email
+                  </th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Aksi
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {murids.map((murid) => (
+                  <tr key={murid.id}>
+                    <td className="px-6 py-4 whitespace-nowrap">{murid.namaLengkap || '-'}</td>
+                    <td className="px-6 py-4 whitespace-nowrap">{murid.email}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                      <button
+                        onClick={() => openDeleteModal(murid)}
+                        className="text-red-600 hover:text-red-800 font-semibold"
+                      >
+                        Delete
+                      </button>
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {murids.map((murid, index) => ( // Tambahkan index untuk animationDelay
-                    <tr 
-                      key={murid.id} 
-                      className="hover:bg-gray-50/50 transition-colors duration-150 animate-fade-in-up" // Tambahkan kelas animasi
-                      style={{ animationDelay: `${index * 0.05}s` }} // Efek stagger
-                    >
-                      <td className="py-3.5 px-4 text-sm text-gray-700 whitespace-nowrap">{murid.id}</td>
-                      <td className="py-3.5 px-4 text-sm text-gray-700 whitespace-nowrap">{murid.name}</td>
-                      <td className="py-3.5 px-4 text-sm text-gray-700 whitespace-nowrap">{murid.email}</td>
-                      <td className="py-3.5 px-4 text-sm text-gray-700 font-mono hidden md:table-cell">{murid.password}</td>
-                      <td className="py-3.5 px-4 text-center space-x-2 whitespace-nowrap">
-                        <button
-                          onClick={() => handleEditMurid(murid)}
-                          className="text-blue-600 hover:text-blue-800 p-1.5 rounded-md hover:bg-blue-100 transition-colors"
-                          aria-label="Edit"
-                        > <Edit size={18} /> </button>
-                        <button
-                          onClick={() => confirmDeleteMurid(murid.id)}
-                          className="text-red-600 hover:text-red-800 p-1.5 rounded-md hover:bg-red-100 transition-colors"
-                          aria-label="Hapus"
-                        > <Trash2 size={18} /> </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </table>
           )}
         </div>
 
         {/* Modal Tambah Murid */}
         {showAddMuridModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto">
-            <div className="bg-white rounded-xl shadow-xl p-7 w-full max-w-md relative animate-fade-in-up my-8">
-              <button onClick={() => setShowAddMuridModal(false)}
-                className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 transition duration-150"
-                aria-label="Tutup modal"
-              > <X size={24} /> </button>
-              <h2 className="text-xl font-semibold mb-6 text-center text-gray-800">Tambah Murid Baru</h2>
-              <form onSubmit={handleAddMurid} className="space-y-4">
-                {renderMuridFormFields(false)} {/* Menggunakan helper function */}
+          <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-50">
+            <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-md">
+              <h2 className="text-lg font-semibold mb-4">Tambah Murid ke Kelas</h2>
+              <form onSubmit={handleAddMuridToKelas} className="space-y-4">
+                <div className="relative">
+                  <label
+                    htmlFor="emailToAdd"
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                  >
+                    Email Murid
+                  </label>
+                  <div className="flex items-center">
+                    <input
+                      type="email"
+                      id="emailToAdd"
+                      placeholder="contoh@example.com"
+                      value={emailToAdd}
+                      onChange={(e) => {
+                        setEmailToAdd(e.target.value);
+                        setEmailValid(null);
+                        setUserFullName('');
+                      }}
+                      onBlur={() => {
+                        if (emailToAdd.trim()) checkEmailExists(emailToAdd.trim());
+                      }}
+                      required
+                      className={`w-full px-4 py-2.5 border rounded-lg transition duration-150 mr-2 ${
+                        emailValid === false
+                          ? 'border-red-500'
+                          : emailValid === true
+                          ? 'border-green-500'
+                          : 'border-gray-300'
+                      }`}
+                    />
+                    {checkingEmail ? (
+                      <span className="text-gray-400 animate-pulse">...</span>
+                    ) : emailValid === true ? (
+                      <span className="text-green-600">✅</span>
+                    ) : emailValid === false ? (
+                      <span className="text-red-600">❌</span>
+                    ) : null}
+                  </div>
+                  {emailValid === false && (
+                    <p className="text-sm text-red-600 mt-1">
+                      Email tidak ditemukan di sistem.
+                    </p>
+                  )}
+                </div>
+
                 <div className="flex justify-end space-x-3 pt-2">
-                  <button type="button" onClick={() => setShowAddMuridModal(false)}
-                    className="px-5 py-2.5 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 transition duration-300 text-sm font-medium"
-                  > Batal </button>
-                  <button type="submit"
-                    className={`px-5 py-2.5 ${primaryButtonColor} ${primaryButtonTextColor} rounded-lg shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 transition duration-300 text-sm font-medium`}
-                  > Simpan Murid </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddMuridModal(false)}
+                    className="px-5 py-2.5 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 text-sm font-medium"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={!emailValid}
+                    className={`px-5 py-2.5 rounded-lg shadow-md text-sm font-medium ${
+                      emailValid
+                        ? primaryButtonColor + ' ' + primaryButtonTextColor
+                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    }`}
+                  >
+                    Simpan Murid
+                  </button>
                 </div>
               </form>
             </div>
           </div>
         )}
 
-        {/* Modal Edit Murid */}
-        {showEditMuridModal && editingMuridId !== null && ( // Pastikan editingMuridId tidak null
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto">
-            <div className="bg-white rounded-xl shadow-xl p-7 w-full max-w-md relative animate-fade-in-up my-8">
-              <button onClick={handleCancelEdit}
-                className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 transition duration-150"
-                aria-label="Tutup modal"
-              > <X size={24} /> </button>
-              <h2 className="text-xl font-semibold mb-6 text-center text-gray-800">Edit Murid</h2>
-              <form onSubmit={handleSaveEdit} className="space-y-4">
-                {renderMuridFormFields(true)} {/* Menggunakan helper function */}
-                <div className="flex justify-end space-x-3 pt-2">
-                  <button type="button" onClick={handleCancelEdit}
-                    className="px-5 py-2.5 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 transition duration-300 text-sm font-medium"
-                  > Batal </button>
-                  <button type="submit"
-                    className={`px-5 py-2.5 ${primaryButtonColor} ${primaryButtonTextColor} rounded-lg shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 transition duration-300 text-sm font-medium`}
-                  > Simpan Perubahan </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {/* Modal Konfirmasi Hapus */}
-        {showDeleteConfirmModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-             <div className="bg-white rounded-xl shadow-xl p-7 w-full max-w-sm text-center animate-fade-in-up">
-              <h3 className="text-xl font-semibold text-gray-800 mb-3">Konfirmasi Hapus</h3>
-              <p className="text-gray-600 mb-6 text-sm">Apakah Anda yakin ingin menghapus murid ini? Aksi ini tidak dapat dibatalkan.</p>
-              <div className="flex justify-center space-x-3">
-                <button type="button"
-                  className="px-5 py-2.5 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 transition duration-300 text-sm font-medium"
-                  onClick={() => { setShowDeleteConfirmModal(false); setMuridToDeleteId(null); }}
-                > Batal </button>
-                <button type="button"
-                  className="px-5 py-2.5 bg-red-600 text-white rounded-lg shadow-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition duration-300 text-sm font-medium"
+        {/* Modal Konfirmasi Delete */}
+        {showDeleteModal && (
+          <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-50">
+            <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-sm">
+              <h3 className="text-lg font-semibold mb-4">Konfirmasi Hapus Murid</h3>
+              <p className="mb-6">
+                Apakah Anda yakin ingin menghapus murid{' '}
+                <strong>{muridToDelete?.namaLengkap}</strong>?
+              </p>
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={() => setShowDeleteModal(false)}
+                  className="px-5 py-2.5 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 text-sm font-medium"
+                >
+                  Batal
+                </button>
+                <button
                   onClick={handleDeleteMurid}
-                > Ya, Hapus </button>
+                  className="px-5 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 text-sm font-medium"
+                >
+                  Hapus
+                </button>
               </div>
             </div>
           </div>
         )}
-
-        {/* Modal Alert (Sukses/Error) */}
-        {showAlertModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-             <div className={`bg-white rounded-xl shadow-xl p-7 w-full max-w-sm text-center animate-fade-in-up ${
-            alertType === 'success' ? 'border-t-4 border-green-500' : 'border-t-4 border-red-500'
-          }`}>
-            <h3 className={`text-xl font-semibold mb-3 ${
-              alertType === 'success' ? 'text-green-700' : 'text-red-700'
-            }`}>
-              {alertType === 'success' ? 'Berhasil!' : 'Terjadi Kesalahan!'}
-            </h3>
-            <p className="text-gray-600 mb-6 text-sm">{alertMessage}</p>
-            <button type="button"
-              className={`px-6 py-2.5 rounded-lg shadow-md transition duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm font-medium ${
-                alertType === 'success' ? 'bg-green-600 hover:bg-green-700 text-white focus:ring-green-500' : 'bg-red-600 hover:bg-red-700 text-white focus:ring-red-500'
-              }`}
-              onClick={() => setShowAlertModal(false)}
-            > Oke </button>
-          </div>
-          </div>
-        )}
-
-        <style jsx>{`
-          @keyframes fadeInUp {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-          }
-          .animate-fade-in-up {
-            animation: fadeInUp 0.4s ease-out forwards; /* Durasi animasi disamakan */
-            opacity: 0; /* Mulai dengan transparan */
-          }
-        `}</style>
-      </main>
+      </div>
     </MainLayout>
   );
-}
+};
+
+export default MemberPage;

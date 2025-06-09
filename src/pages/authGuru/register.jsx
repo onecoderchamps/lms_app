@@ -41,7 +41,7 @@ export default function RegisterGuruPage() {
         uid: user.uid,
         namaLengkap,
         email,
-        role: "murid",
+        role: "guru",
         createdAt: new Date().toISOString(),
       });
 
@@ -77,7 +77,7 @@ export default function RegisterGuruPage() {
             <img className="h-12 w-auto" src="/logo.png" alt="CoderChamps Logo" />
           </div>
           <h2 className="mb-1 text-center text-2xl md:text-3xl font-bold tracking-tight text-gray-800">
-            Pendaftaran Akun <span className={`${primaryTextColor}`}>Murid</span>
+            Pendaftaran Akun <span className={`${primaryTextColor}`}>Guru</span>
           </h2>
           <p className="mb-8 text-center text-sm text-gray-600">
             Isi data berikut untuk membuat akun baru.
