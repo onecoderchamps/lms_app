@@ -1,7 +1,7 @@
-
-import { useState, useEffect } from 'react';
-import MainLayout from "./layouts/MainLayout"; // Pastikan path ini benar
-import { app } from "../../api/firebaseConfig"; // Pastikan path ini benar
+import React, { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/router';
+import MainLayout from "./layouts/MainLayout";
+import { app } from "../../api/firebaseConfig";
 import {
   getFirestore,
   collection,
@@ -11,18 +11,21 @@ import {
   doc,
   onSnapshot,
   query,
+  where,
   orderBy,
   serverTimestamp,
 } from "firebase/firestore";
-import { PlusCircle, X, FileText, Video, BookText, ExternalLink, Trash2, CalendarDays, Clock, PlayCircle, CheckSquare, Hourglass, Edit } from 'lucide-react';
+import { PlusCircle, X, CalendarDays, Clock, PlayCircle, CheckSquare, Hourglass, Edit, Trash2, FileText, Video, ArrowLeft } from 'lucide-react';
 
 const db = getFirestore(app);
 
 export default function UjianPage() {
+  const router = useRouter();
   const [ujians, setUjians] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // State untuk modal tambah (tanpa 'kelas')
+  const [activeClass, setActiveClass] = useState({ id: null, name: null });
+
   const [showAddModal, setShowAddModal] = useState(false);
   const [ujianName, setUjianName] = useState("");
   const [fileSoalUrl, setFileSoalUrl] = useState("");
@@ -31,31 +34,45 @@ export default function UjianPage() {
   const [waktuUjian, setWaktuUjian] = useState("");
   const [durasiUjian, setDurasiUjian] = useState(90);
 
-  // State untuk modal edit (tanpa 'kelas')
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingUjian, setEditingUjian] = useState(null);
 
-  // State untuk modal hapus dan alert
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
   const [ujianToDelete, setUjianToDelete] = useState(null);
+  
   const [showAlertModal, setShowAlertModal] = useState(false);
   const [alertMessage, setAlertMessage] = useState('');
   const [alertType, setAlertType] = useState('success');
-
-  // State untuk animasi dan waktu dinamis
+  
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [hasMounted, setHasMounted] = useState(false);
 
   useEffect(() => {
+    const classId = localStorage.getItem('idKelas');
+    const className = localStorage.getItem('namaKelas');
+    if (classId && className) {
+      setActiveClass({ id: classId, name: className });
+    }
     setHasMounted(true);
+  }, []);
+  
+  useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 60000);
     return () => clearInterval(timer);
   }, []);
 
-  // Mengambil data dari Firestore secara real-time
   useEffect(() => {
+    if (!activeClass.id) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
-    const q = query(collection(db, "ujian"), orderBy("createdAt", "desc"));
+    const q = query(
+      collection(db, "ujian"), 
+      where("kelas", "==", activeClass.id),
+      orderBy("createdAt", "desc")
+    );
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setUjians(data);
@@ -66,10 +83,10 @@ export default function UjianPage() {
       setLoading(false);
     });
     return () => unsubscribe();
-  }, []);
+  }, [activeClass.id]);
 
   const getUjianStatusForGuruDisplay = (ujianDate, ujianTime, durationMinutes) => {
-    const ujianStartDateTime = new Date(`${ujianDate}T${ujianTime}:00`);
+    const ujianStartDateTime = new Date(`<span class="math-inline">\{ujianDate\}T</span>{ujianTime}:00`);
     const ujianEndDateTime = new Date(ujianStartDateTime.getTime() + durationMinutes * 60000);
     const now = currentTime;
 
@@ -99,11 +116,15 @@ export default function UjianPage() {
       showCustomAlert('Semua field (kecuali URL Video) wajib diisi!', 'error');
       return;
     }
+    setIsSubmitting(true);
     try {
       await addDoc(collection(db, 'ujian'), {
-        name: ujianName, fileSoalUrl: fileSoalUrl,
+        kelas: activeClass.id,
+        name: ujianName, 
+        fileSoalUrl: fileSoalUrl,
         fileVideoUrl: fileVideoUrl.trim() || null,
-        date: tanggalUjian, time: waktuUjian,
+        date: tanggalUjian, 
+        time: waktuUjian,
         durationMinutes: parseInt(durasiUjian, 10),
         createdAt: serverTimestamp()
       });
@@ -112,29 +133,37 @@ export default function UjianPage() {
       showCustomAlert('Ujian berhasil ditambahkan!', 'success');
     } catch (error) {
       showCustomAlert('Gagal menambahkan ujian.', 'error');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleOpenEditModal = (ujian) => {
-    setEditingUjian({ ...ujian });
+    setEditingUjian({ 
+        ...ujian,
+        durationMinutes: ujian.durationMinutes || 90
+    });
     setShowEditModal(true);
   };
 
   const handleSaveEditUjian = async (e) => {
     e.preventDefault();
     if (!editingUjian || !editingUjian.name.trim() || !editingUjian.fileSoalUrl.trim() || !editingUjian.date || !editingUjian.time || !editingUjian.durationMinutes) {
-      showCustomAlert('Semua field (kecuali URL Video) wajib diisi untuk edit!', 'error');
+      showCustomAlert('Semua field (kecuali URL Video) wajib diisi!', 'error');
       return;
     }
     const ujianDocRef = doc(db, "ujian", editingUjian.id);
+    setIsSubmitting(true);
     try {
-      const { id, ...dataToUpdate } = editingUjian;
+      const { id, createdAt, kelas, ...dataToUpdate } = editingUjian;
       dataToUpdate.updatedAt = serverTimestamp();
       await updateDoc(ujianDocRef, dataToUpdate);
       setShowEditModal(false);
       showCustomAlert('Data ujian berhasil diperbarui!', 'success');
     } catch (error) {
       showCustomAlert('Gagal memperbarui ujian.', 'error');
+    } finally {
+      setIsSubmitting(false);
     }
   };
   
@@ -147,6 +176,7 @@ export default function UjianPage() {
 
   const handleDeleteUjian = async () => {
     if (!ujianToDelete) return;
+    setIsSubmitting(true);
     try {
       await deleteDoc(doc(db, "ujian", ujianToDelete.id));
       showCustomAlert('Ujian berhasil dihapus!', 'success');
@@ -154,6 +184,8 @@ export default function UjianPage() {
       setShowDeleteConfirmModal(false);
     } catch (error) {
       showCustomAlert('Gagal menghapus ujian.', 'error');
+    } finally {
+        setIsSubmitting(false);
     }
   };
 
@@ -166,22 +198,22 @@ export default function UjianPage() {
       <main className="flex-1 md:ml-64 md:pt-16 p-4 md:p-6 lg:p-8 bg-gradient-to-br from-slate-50 to-gray-100 min-h-screen mt-15">
         <div className="max-w-full mx-auto bg-white rounded-xl shadow-xl p-6 md:p-8">
           <div className={`flex flex-col md:flex-row justify-between md:items-center mb-8 gap-4 ${hasMounted ? 'animate-fade-in-up' : 'opacity-0'}`} style={{ animationDelay: '0.1s' }}>
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Manajemen Ujian</h1>
-            <button
-              onClick={() => { resetAddForm(); setShowAddModal(true); }}
-              className={`flex items-center space-x-2 ${primaryButtonColor} ${primaryButtonTextColor} px-5 py-2.5 rounded-lg shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 transition duration-300 text-sm font-medium`}
-            >
+            <div>
+                <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Manajemen Ujian</h1>
+                <p className="text-md text-orange-600 font-semibold mt-1">Untuk Kelas: {activeClass.name}</p>
+            </div>
+            <button onClick={() => { resetAddForm(); setShowAddModal(true); }} className={`flex items-center space-x-2 ${primaryButtonColor} ${primaryButtonTextColor} px-5 py-2.5 rounded-lg shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 transition duration-300 text-sm font-medium`}>
               <PlusCircle size={20} />
-              <span>Upload Ujian Baru</span>
+              <span>Tambah Ujian Baru</span>
             </button>
           </div>
 
           {loading ? (
-            <p className="text-center text-gray-500 py-16">Memuat data ujian...</p>
+            <p className="text-center text-gray-500 py-16 animate-pulse">Memuat data ujian...</p>
           ) : ujians.length === 0 ? (
             <div className="text-center py-16 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
               <p className="text-xl font-medium text-gray-500">Belum ada ujian.</p>
-              <p className="text-sm text-gray-400 mt-2">Klik "Upload Ujian Baru" untuk menambahkan.</p>
+              <p className="text-sm text-gray-400 mt-2">Klik "Tambah Ujian Baru" untuk menambahkan.</p>
             </div>
           ) : (
             <ul className="space-y-4">
@@ -195,8 +227,8 @@ export default function UjianPage() {
                   >
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between">
                       <div className="flex items-center space-x-3 sm:space-x-4 mb-3 sm:mb-0 flex-grow min-w-0">
-                        <div className={`p-2.5 rounded-full ${statusInfo.colorClass.split(' ')[0].replace('bg-', 'bg-') + '-50'} ${statusInfo.colorClass.split(' ')[1].replace('text-', 'text-')}`}>
-                           {statusInfo.icon || <BookText size={22} />}
+                        <div className={`p-2.5 rounded-full`}>
+                            {statusInfo.icon || <BookText size={22} />}
                         </div>
                         <div className="flex-grow min-w-0">
                           <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-x-2">
@@ -219,7 +251,7 @@ export default function UjianPage() {
                           </div>
                         </div>
                       </div>
-                      <div className="flex items-center space-x-2 flex-shrink-0 w-full sm:w-auto justify-start sm:justify-end mt-3 sm:mt-0">
+                      <div className="flex items-center space-x-2 flex-shrink-0 w-full sm:w-auto justify-end mt-3 sm:mt-0">
                         <a href={ujian.fileSoalUrl} target="_blank" rel="noreferrer" className="flex items-center text-xs font-medium text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-md transition duration-150">
                           <FileText size={14} className="mr-1" /> Lihat Soal
                         </a>
@@ -243,66 +275,57 @@ export default function UjianPage() {
           )}
         </div>
 
-        {/* Modal Tambah Ujian */}
         {showAddModal && (
            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto ">
-            <div className="bg-white rounded-xl shadow-xl p-7 w-full max-w-lg relative animate-fade-in-up my-8">
-              <button onClick={() => setShowAddModal(false)}
-                className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 transition duration-150"
-                aria-label="Tutup modal"
-              > <X size={24} /> </button>
-              <h2 className="text-xl font-semibold mb-6 text-center text-gray-800">Upload Ujian Baru</h2>
-              <form onSubmit={handleAddUjian} className="space-y-4">
-                {/* Field-field form tambah ujian (tanpa kelas) */}
-                <div>
-                  <label htmlFor="ujianName" className="block text-sm font-medium text-gray-700 mb-1">Nama Ujian</label>
-                  <input type="text" id="ujianName" value={ujianName} onChange={(e) => setUjianName(e.target.value)} placeholder="Contoh: Ujian Tengah Semester Matematika" className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition duration-150`} required />
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                        <label htmlFor="tanggalUjian" className="block text-sm font-medium text-gray-700 mb-1">Tanggal Ujian</label>
-                        <input type="date" id="tanggalUjian" value={tanggalUjian} onChange={(e) => setTanggalUjian(e.target.value)} className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition duration-150`} required />
-                    </div>
-                    <div>
-                        <label htmlFor="waktuUjian" className="block text-sm font-medium text-gray-700 mb-1">Waktu Mulai</label>
-                        <input type="time" id="waktuUjian" value={waktuUjian} onChange={(e) => setWaktuUjian(e.target.value)} className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition duration-150`} required />
-                    </div>
-                </div>
-                <div>
-                    <label htmlFor="durasiUjian" className="block text-sm font-medium text-gray-700 mb-1">Durasi Ujian (menit)</label>
-                    <input type="number" id="durasiUjian" value={durasiUjian} onChange={(e) => setDurasiUjian(parseInt(e.target.value, 10) || 0)} min="1" placeholder="Contoh: 90" className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition duration-150`} required />
-                </div>
-                <div>
-                  <label htmlFor="fileSoalUrl" className="block text-sm font-medium text-gray-700 mb-1">URL File Soal Ujian (PDF/DOC)</label>
-                  <input type="url" id="fileSoalUrl" value={fileSoalUrl} onChange={(e) => setFileSoalUrl(e.target.value)} placeholder="Contoh: https://example.com/soal-ujian.pdf" className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition duration-150`} required />
-                  <p className="text-xs text-gray-500 mt-1">Masukkan URL publik ke file soal.</p>
-                </div>
-                <div>
-                  <label htmlFor="fileVideoUrl" className="block text-sm font-medium text-gray-700 mb-1">URL Video Penjelasan (opsional)</label>
-                  <input type="url" id="fileVideoUrl" value={fileVideoUrl} onChange={(e) => setFileVideoUrl(e.target.value)} placeholder="Contoh: https://www.youtube.com/embed/VIDEO_ID" className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition duration-150`} />
-                  <p className="text-xs text-gray-500 mt-1">Masukkan URL embed video jika ada.</p>
-                </div>
-                <div className="flex justify-end space-x-3 pt-2">
-                  <button type="button" onClick={() => setShowAddModal(false)}
-                    className="px-5 py-2.5 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300"
-                  > Batal </button>
-                  <button type="submit" className={`px-5 py-2.5 ${primaryButtonColor} ${primaryButtonTextColor} rounded-lg shadow-md`}>
-                    Upload Ujian
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
+             <div className="bg-white rounded-xl shadow-xl p-7 w-full max-w-lg relative animate-fade-in-up my-8">
+               <button onClick={() => setShowAddModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 transition duration-150"><X size={24}/></button>
+               <h2 className="text-xl font-semibold mb-6 text-center text-gray-800">Upload Ujian Baru</h2>
+               <form onSubmit={handleAddUjian} className="space-y-4">
+                 <div>
+                   <label htmlFor="ujianName" className="block text-sm font-medium text-gray-700 mb-1">Nama Ujian</label>
+                   <input type="text" id="ujianName" value={ujianName} onChange={(e) => setUjianName(e.target.value)} placeholder="Contoh: Ujian Tengah Semester Matematika" className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} required />
+                 </div>
+                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                     <div>
+                         <label htmlFor="tanggalUjian" className="block text-sm font-medium text-gray-700 mb-1">Tanggal Ujian</label>
+                         <input type="date" id="tanggalUjian" value={tanggalUjian} onChange={(e) => setTanggalUjian(e.target.value)} className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} required />
+                     </div>
+                     <div>
+                         <label htmlFor="waktuUjian" className="block text-sm font-medium text-gray-700 mb-1">Waktu Mulai</label>
+                         <input type="time" id="waktuUjian" value={waktuUjian} onChange={(e) => setWaktuUjian(e.target.value)} className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} required />
+                     </div>
+                 </div>
+                 <div>
+                     <label htmlFor="durasiUjian" className="block text-sm font-medium text-gray-700 mb-1">Durasi Ujian (menit)</label>
+                     <input type="number" id="durasiUjian" value={durasiUjian} onChange={(e) => setDurasiUjian(parseInt(e.target.value, 10) || 0)} min="1" placeholder="Contoh: 90" className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} required />
+                 </div>
+                 <div>
+                   <label htmlFor="fileSoalUrl" className="block text-sm font-medium text-gray-700 mb-1">URL File Soal Ujian (PDF/DOC)</label>
+                   <input type="url" id="fileSoalUrl" value={fileSoalUrl} onChange={(e) => setFileSoalUrl(e.target.value)} placeholder="Contoh: https://example.com/soal-ujian.pdf" className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} required />
+                   <p className="text-xs text-gray-500 mt-1">Masukkan URL publik ke file soal.</p>
+                 </div>
+                 <div>
+                   <label htmlFor="fileVideoUrl" className="block text-sm font-medium text-gray-700 mb-1">URL Video Penjelasan (opsional)</label>
+                   <input type="url" id="fileVideoUrl" value={fileVideoUrl} onChange={(e) => setFileVideoUrl(e.target.value)} placeholder="Contoh: https://youtube.com/embed/..." className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} />
+                   <p className="text-xs text-gray-500 mt-1">Masukkan URL embed video jika ada.</p>
+                 </div>
+                 <div className="flex justify-end space-x-3 pt-2">
+                   <button type="button" onClick={() => setShowAddModal(false)} className="px-5 py-2.5 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300">Batal</button>
+                   <button type="submit" disabled={isSubmitting} className={`px-5 py-2.5 ${primaryButtonColor} ${primaryButtonTextColor} rounded-lg shadow-md disabled:opacity-50`}>
+                     {isSubmitting ? 'Menyimpan...' : 'Upload Ujian'}
+                   </button>
+                 </div>
+               </form>
+             </div>
+           </div>
         )}
 
-        {/* Modal Edit Ujian */}
         {showEditModal && editingUjian && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto">
             <div className="bg-white rounded-xl shadow-xl p-7 w-full max-w-lg relative animate-fade-in-up my-8">
               <button onClick={handleCancelEdit} className="absolute top-4 right-4 text-gray-400 hover:text-gray-700"><X size={24} /></button>
               <h2 className="text-xl font-semibold mb-6 text-center text-gray-800">Edit Ujian</h2>
               <form onSubmit={handleSaveEditUjian} className="space-y-4">
-                {/* Field-field form edit ujian (tanpa kelas) */}
                 <div>
                   <label htmlFor="editedUjianName" className="block text-sm font-medium text-gray-700 mb-1">Nama Ujian</label>
                   <input type="text" id="editedUjianName" value={editingUjian.name} onChange={(e) => setEditingUjian({...editingUjian, name: e.target.value})} className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} required />
@@ -314,12 +337,12 @@ export default function UjianPage() {
                     </div>
                     <div>
                         <label htmlFor="editedWaktuUjian" className="block text-sm font-medium text-gray-700 mb-1">Waktu Mulai</label>
-                        <input type="time" id="editedWaktuUjian" value={editingSession.time} onChange={(e) => setEditingSession({...editingSession, time: e.target.value})} className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} required />
+                        <input type="time" id="editedWaktuUjian" value={editingUjian.time} onChange={(e) => setEditingUjian({...editingUjian, time: e.target.value})} className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} required />
                     </div>
                 </div>
                 <div>
                     <label htmlFor="editedDurasiUjian" className="block text-sm font-medium text-gray-700 mb-1">Durasi Ujian (menit)</label>
-                    <input type="number" id="editedDurasiUjian" value={editingUjian.durationMinutes} onChange={(e) => setEditingUjian({...editingUjian, durationMinutes: parseInt(e.target.value, 10) || 0})} min="1" placeholder="Contoh: 90" className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} required />
+                    <input type="number" id="editedDurasiUjian" value={editingUjian.durationMinutes} onChange={(e) => setEditingUjian({...editingUjian, durationMinutes: parseInt(e.target.value, 10) || 0})} min="1" className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} required />
                 </div>
                 <div>
                   <label htmlFor="editedFileSoalUrl" className="block text-sm font-medium text-gray-700 mb-1">URL File Soal Ujian</label>
@@ -331,44 +354,34 @@ export default function UjianPage() {
                 </div>
                 <div className="flex justify-end space-x-3 pt-2">
                   <button type="button" onClick={handleCancelEdit} className="px-5 py-2.5 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300">Batal</button>
-                  <button type="submit" className={`px-5 py-2.5 ${primaryButtonColor} ${primaryButtonTextColor} rounded-lg shadow-md`}>Simpan Perubahan</button>
+                  <button type="submit" disabled={isSubmitting} className={`px-5 py-2.5 ${primaryButtonColor} ${primaryButtonTextColor} rounded-lg shadow-md disabled:opacity-50`}>{isSubmitting ? 'Menyimpan...' : 'Simpan Perubahan'}</button>
                 </div>
               </form>
             </div>
           </div>
         )}
         
-        {/* Modal Konfirmasi Hapus */}
         {showDeleteConfirmModal && ujianToDelete && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-             <div className="bg-white rounded-xl shadow-xl p-7 w-full max-w-sm text-center animate-fade-in-up">
+            <div className="bg-white rounded-xl shadow-xl p-7 w-full max-w-sm text-center animate-fade-in-up">
               <h3 className="text-xl font-semibold text-gray-800 mb-3">Konfirmasi Hapus</h3>
               <p className="text-gray-600 mb-6 text-sm">Apakah Anda yakin ingin menghapus ujian <br/><strong className="text-gray-900">{ujianToDelete.name}</strong>?</p>
               <div className="flex justify-center space-x-3">
-                <button type="button" className="px-5 py-2.5 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300"
-                  onClick={() => setShowDeleteConfirmModal(false)}
-                > Batal </button>
-                <button type="button" className="px-5 py-2.5 bg-red-600 text-white rounded-lg shadow-md hover:bg-red-700"
-                  onClick={handleDeleteUjian}
-                > Ya, Hapus </button>
+                <button type="button" className="px-5 py-2.5 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300" onClick={() => setShowDeleteConfirmModal(false)}>Batal</button>
+                <button type="button" disabled={isSubmitting} className="px-5 py-2.5 bg-red-600 text-white rounded-lg shadow-md hover:bg-red-700 disabled:opacity-50 flex items-center" onClick={handleDeleteUjian}>
+                    {isSubmitting ? 'Menghapus...' : 'Ya, Hapus'}
+                </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* Modal Alert */}
         {showAlertModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
              <div className={`bg-white rounded-xl shadow-xl p-7 w-full max-w-sm text-center animate-fade-in-up border-t-4 ${alertType === 'success' ? 'border-green-500' : 'border-red-500'}`}>
-              <h3 className={`text-xl font-semibold mb-3 ${
-                alertType === 'success' ? 'text-green-700' : 'text-red-700'
-              }`}>{alertType === 'success' ? 'Berhasil!' : 'Terjadi Kesalahan!'}</h3>
+              <h3 className={`text-xl font-semibold mb-3 ${alertType === 'success' ? 'text-green-700' : 'text-red-700'}`}>{alertType === 'success' ? 'Berhasil!' : 'Terjadi Kesalahan!'}</h3>
               <p className="text-gray-600 mb-6 text-sm">{alertMessage}</p>
-              <button type="button" className={`px-6 py-2.5 rounded-lg shadow-md ${
-                alertType === 'success' ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-red-600 hover:bg-red-700 text-white'
-              }`}
-                onClick={() => setShowAlertModal(false)}
-              > Oke </button>
+              <button type="button" className={`px-6 py-2.5 rounded-lg shadow-md ${alertType === 'success' ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-red-600 hover:bg-red-700 text-white'}`} onClick={() => setShowAlertModal(false)}>Oke</button>
             </div>
           </div>
         )}

@@ -1,3 +1,6 @@
+// src/pages/guru/layouts/Sidebar.jsx (atau path yang sesuai)
+'use client';
+
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { useState, useEffect } from "react";
@@ -10,21 +13,22 @@ import {
   ListChecks,
   Edit,
   ClipboardCheck,
-  Settings,
   ChevronDown,
   ChevronUp,
+  BookCheckIcon,
 } from 'lucide-react';
 
 const SansLogo = () => (
   <div className="flex flex-col items-center justify-center py-4">
     <img
-      src="/logo.png"
+      src="/logo.png" // Pastikan path logo benar
       alt="CoderChamps Logo"
       className="h-12 w-auto"
     />
   </div>
 );
 
+// --- MENU "SETTING" DIHAPUS DARI SINI ---
 const menuItems = [
   {
     section: "Main Menu",
@@ -46,23 +50,19 @@ const menuItems = [
           { name: "Materi", path: "/guru/materi", icon: <FileText size={18} /> },
           { name: "Ujian", path: "/guru/ujian", icon: <ListChecks size={18} />},
           { name: "Tugas", path: "/guru/tugas", icon: <Edit size={18} /> },
-          { name: "Berikan Nilai", path: "/guru/berikan-nilai", icon: <Edit size={18} /> },
+          { name: "Berikan Nilai", path: "/guru/berikan-nilai", icon: <BookCheckIcon size={18} /> },
           { name: "Absen", path: "/guru/absen", icon: <ClipboardCheck size={18} /> },
         ],
       },
     ],
-  },
-  {
-    section: "Konfigurasi",
-    items: [{ name: "Setting", path: "/guru/setting", icon: <Settings size={20} /> }],
   },
 ];
 
 const activeBg = "bg-orange-100";
 const activeTextColor = "text-orange-600";
 const activeFontWeight = "font-semibold";
-const hoverBg = "hover:bg-orange-400";
-const hoverTextColor = "hover:text-gray-50";
+const hoverBg = "hover:bg-orange-500"; // Warna hover disesuaikan
+const hoverTextColor = "hover:text-white"; // Teks menjadi putih saat hover
 const defaultTextColor = "text-gray-700";
 const defaultIconColor = "text-gray-500";
 const activeIconColor = "text-orange-500";
@@ -91,8 +91,9 @@ export default function Sidebar() {
   }, [router.pathname]);
 
   return (
-    <aside className="w-64 h-screen bg-white shadow-xl fixed top-0 left-0 overflow-y-auto flex flex-col">
-      <div className="px-2 border-gray-200">
+    <aside className="w-64 h-screen bg-white shadow-xl fixed top-0 left-0 overflow-y-auto flex flex-col font-sans">
+
+      <div className="px-2 border-b border-gray-100">
         <SansLogo />
       </div>
       <nav className="flex-1 flex flex-col space-y-1 p-3">
@@ -111,12 +112,11 @@ export default function Sidebar() {
                       <button
                         onClick={() => toggleMenu(item.name)}
                         className={`group flex items-center justify-between w-full px-3 py-2.5 rounded-md text-sm transition-colors duration-150
-                          ${isOpen ? `${hoverBg} ${defaultTextColor}` : `${defaultTextColor} ${hoverBg} ${hoverTextColor}`}
+                          ${isOpen ? `${defaultTextColor}` : `${defaultTextColor} ${hoverBg} ${hoverTextColor}`}
                           ${parentIsActive && !isOpen ? `${activeTextColor} ${activeFontWeight}` : ''}
                         `}
                       >
                         <div className="flex items-center space-x-3">
-                          {/* PERUBAHAN ICON COLOR DI SINI */}
                           <span className={`${parentIsActive || isOpen ? activeIconColor : defaultIconColor} group-hover:text-white transition-colors duration-150`}>
                             {item.icon || <span className="w-5 h-5"></span>}
                           </span>
@@ -137,7 +137,6 @@ export default function Sidebar() {
                                     : `${defaultTextColor.replace('700', '600')} ${hoverBg} ${hoverTextColor}`
                                 } transition-colors duration-150`}
                             >
-                              {/* PERUBAHAN ICON COLOR DI SINI */}
                               <span className={`${isActivePath(subItem.path) ? activeIconColor : defaultIconColor.replace('500', '400')} group-hover:text-white transition-colors duration-150`}>
                                 {subItem.icon || <span className="w-[18px] h-[18px]"></span>}
                               </span>
@@ -158,7 +157,6 @@ export default function Sidebar() {
                           : `${defaultTextColor} ${hoverBg} ${hoverTextColor}`
                       } transition-colors duration-150`}
                   >
-                    {/* PERUBAHAN ICON COLOR DI SINI */}
                     <span className={`${isActivePath(item.path) ? activeIconColor : defaultIconColor} group-hover:text-white transition-colors duration-150`}>
                       {item.icon || <span className="w-5 h-5"></span>}
                     </span>

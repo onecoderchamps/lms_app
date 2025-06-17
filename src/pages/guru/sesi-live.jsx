@@ -1,8 +1,8 @@
-
-import { useState, useEffect } from 'react';
-import MainLayout from './layouts/MainLayout';
-import { PlusCircle, X, CalendarDays, Clock, Link as LinkIcon, Trash2, Video, Edit } from 'lucide-react';
-import { app } from "../../api/firebaseConfig"; // Impor konfigurasi Firebase Anda
+import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/router';
+import MainLayout from './layouts/MainLayout'; // Pastikan path ini benar
+import { PlusCircle, X, CalendarDays, Clock, Link as LinkIcon, Trash2, Video, Edit, ArrowLeft } from 'lucide-react';
+import { app } from "../../api/firebaseConfig"; // Pastikan path ini benar
 import {
   getFirestore,
   collection,
@@ -12,6 +12,7 @@ import {
   doc,
   onSnapshot,
   query,
+  where,
   orderBy,
   serverTimestamp,
 } from 'firebase/firestore';
@@ -19,9 +20,12 @@ import {
 const db = getFirestore(app);
 
 export default function SesiLivePage() {
-  // State untuk data dan UI
+  const router = useRouter();
   const [liveSessions, setLiveSessions] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // State untuk menyimpan kelas yang aktif dari localStorage
+  const [activeClass, setActiveClass] = useState({ id: null, name: null });
 
   // State untuk modal tambah
   const [showAddSessionModal, setShowAddSessionModal] = useState(false);
@@ -42,22 +46,45 @@ export default function SesiLivePage() {
   const [alertType, setAlertType] = useState('success');
   const [hasMounted, setHasMounted] = useState(false);
 
-  // Mengambil data dari Firestore secara real-time
+  // useEffect untuk mengambil ID kelas dari localStorage saat komponen mount
   useEffect(() => {
+    const classId = localStorage.getItem('idKelas');
+    const className = localStorage.getItem('namaKelas');
+
+    if (classId && className) {
+      setActiveClass({ id: classId, name: className });
+    } else {
+      setLoading(false);
+    }
     setHasMounted(true);
+  }, []);
+
+  // useEffect untuk mengambil data sesi live berdasarkan kelas yang aktif
+  useEffect(() => {
+    if (!activeClass.id) {
+        setLiveSessions([]);
+        return;
+    }
+
     setLoading(true);
-    const q = query(collection(db, "sesiLive"), orderBy("createdAt", "desc"));
+    const q = query(
+      collection(db, "sesiLive"),
+      where("kelas", "==", activeClass.id),
+      orderBy("createdAt", "desc")
+    );
+
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setLiveSessions(data);
       setLoading(false);
     }, (error) => {
-      console.error("Gagal mengambil data: ", error);
+      console.error("Gagal mengambil data sesi live:", error);
       showCustomAlert('Gagal memuat data sesi live.', 'error');
       setLoading(false);
     });
+
     return () => unsubscribe();
-  }, []);
+  }, [activeClass.id]);
 
   const showCustomAlert = (message, type = "success") => {
     setAlertMessage(message);
@@ -81,6 +108,7 @@ export default function SesiLivePage() {
         date: sessionDate,
         time: sessionTime,
         link: sessionLink,
+        kelas: activeClass.id,
         createdAt: serverTimestamp(),
       });
       resetAddForm();
@@ -99,12 +127,12 @@ export default function SesiLivePage() {
   const handleSaveEdit = async (e) => {
     e.preventDefault();
     if (!editingSession || !editingSession.name.trim() || !editingSession.date || !editingSession.time || !editingSession.link.trim()) {
-      showCustomAlert('Semua field wajib diisi untuk edit!', 'error');
+      showCustomAlert('Semua field wajib diisi!', 'error');
       return;
     }
     const sessionDocRef = doc(db, "sesiLive", editingSession.id);
     try {
-      const { id, ...dataToUpdate } = editingSession;
+      const { id, createdAt, kelas, ...dataToUpdate } = editingSession;
       await updateDoc(sessionDocRef, dataToUpdate);
       showCustomAlert('Sesi live berhasil diperbarui!', 'success');
       setShowEditSessionModal(false);
@@ -141,7 +169,10 @@ export default function SesiLivePage() {
       <main className="flex-1 md:ml-64 md:pt-16 p-4 md:p-6 lg:p-8 bg-gradient-to-br from-slate-50 to-gray-100 min-h-screen mt-15">
         <div className="max-w-full mx-auto bg-white rounded-xl shadow-xl p-6 md:p-8">
           <div className={`flex flex-col md:flex-row justify-between md:items-center mb-8 gap-4 ${hasMounted ? 'animate-fade-in-up' : 'opacity-0'}`} style={{ animationDelay: '0.1s' }}>
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Manajemen Sesi Live</h1>
+            <div>
+                <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Manajemen Sesi Live</h1>
+                <p className="text-md text-orange-600 font-semibold mt-1">Untuk Kelas: {activeClass.name}</p>
+            </div>
             <button
               onClick={() => { resetAddForm(); setShowAddSessionModal(true); }}
               className={`flex items-center space-x-2 ${primaryButtonColor} ${primaryButtonTextColor} px-5 py-2.5 rounded-lg shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 transition duration-300 text-sm font-medium`}
@@ -152,17 +183,17 @@ export default function SesiLivePage() {
           </div>
 
           {loading ? (
-             <p className="text-center text-gray-500 py-16">Memuat data...</p>
+             <p className="text-center text-gray-500 py-16 animate-pulse">Memuat data...</p>
           ) : liveSessions.length === 0 ? (
             <div className="text-center py-16 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
-              <p className="text-xl font-medium text-gray-500">Belum ada sesi live.</p>
+              <p className="text-xl font-medium text-gray-500">Belum ada sesi live untuk kelas ini.</p>
               <p className="text-sm text-gray-400 mt-2">Klik "Jadwalkan Sesi Baru" untuk menambahkan.</p>
             </div>
           ) : (
             <ul className="space-y-5">
               {liveSessions.map((session, index) => (
-                <li
-                  key={session.id}
+                <li 
+                  key={session.id} 
                   className={`bg-white border border-gray-200 rounded-lg p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between shadow-sm hover:shadow-lg transition-shadow duration-200 ${hasMounted ? 'animate-fade-in-up' : 'opacity-0'}`}
                   style={{ animationDelay: hasMounted ? `${(index * 0.05) + 0.2}s` : '0s' }}
                 >
@@ -201,7 +232,6 @@ export default function SesiLivePage() {
           )}
         </div>
 
-        {/* Modal Tambah Sesi Live */}
         {showAddSessionModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto">
             <div className="bg-white rounded-xl shadow-xl p-7 w-full max-w-lg relative animate-fade-in-up my-8">
@@ -237,7 +267,6 @@ export default function SesiLivePage() {
           </div>
         )}
 
-        {/* Modal Edit Sesi Live */}
         {showEditSessionModal && editingSession && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto">
             <div className="bg-white rounded-xl shadow-xl p-7 w-full max-w-lg relative animate-fade-in-up my-8">
@@ -271,7 +300,6 @@ export default function SesiLivePage() {
           </div>
         )}
         
-        {/* Modal Konfirmasi Hapus */}
         {showDeleteConfirmModal && sessionToDelete && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
             <div className="bg-white rounded-xl shadow-xl p-7 w-full max-w-sm text-center animate-fade-in-up">
@@ -285,7 +313,6 @@ export default function SesiLivePage() {
           </div>
         )}
 
-        {/* Modal Alert */}
         {showAlertModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
              <div className={`bg-white rounded-xl shadow-xl p-7 w-full max-w-sm text-center animate-fade-in-up border-t-4 ${alertType === 'success' ? 'border-green-500' : 'border-red-500'}`}>

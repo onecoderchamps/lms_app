@@ -1,10 +1,12 @@
-
 import { useState, useEffect } from 'react';
 import MainLayout from './layouts/MainLayout';
 import Link from 'next/link';
-import { BookOpen, Edit, ListChecks, PlayCircle, FileText, Video } from 'lucide-react'; 
+import { BookOpen, Edit, ListChecks, FileText, Video, Loader, AlertTriangle } from 'lucide-react';
+import { db, auth } from "../../api/firebaseConfig";
+import { collection, query, where, getDocs, doc, getDoc, orderBy, limit, Timestamp } from 'firebase/firestore';
+import DashboardCalendar from './component/calendar';
 
-// Komponen Kartu Dashboard Berwarna
+// Komponen Kartu Dashboard
 const DashboardCard = ({ title, value, subValue, icon, bgColorClasses, link, linkText, animationDelay }) => {
   const IconComponent = icon;
   return (
@@ -31,100 +33,194 @@ const DashboardCard = ({ title, value, subValue, icon, bgColorClasses, link, lin
   );
 };
 
-
+// --- Komponen Utama Dashboard Murid ---
 export default function MuridDashboardPage() {
   const [dashboardData, setDashboardData] = useState({
-    kursusDiikuti: 3,
-    progresRataRata: '75%',
-    tugasMendatang: 2,
-    ujianBerikutnya: 'Matematika - 20 Juni 2025', // Format nama ujian - tanggal
+    tugasMendatang: 0,
+    ujianBerikutnya: { nama: 'Tidak ada', tanggal: 'Tidak ada jadwal' },
+    materiTerbaru: [],
+    pengumumanTerbaru: null,
   });
-  
+  const [namaMurid, setNamaMurid] = useState('');
+  const [enrolledKelasIds, setEnrolledKelasIds] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchDashboardData = async (muridId) => {
+      try {
+        setLoading(true);
+
+        const userDocRef = doc(db, 'users', muridId);
+        const userDocSnap = await getDoc(userDocRef);
+        if (userDocSnap.exists()) {
+          setNamaMurid(userDocSnap.data().namaLengkap.split(' ')[0]);
+        }
+
+        const enrollmentsQuery = query(collection(db, 'enrollments'), where('muridId', '==', muridId));
+        const enrollmentsSnapshot = await getDocs(enrollmentsQuery);
+        const ids = enrollmentsSnapshot.docs.map(d => d.data().kelasId);
+        setEnrolledKelasIds(ids);
+        
+        let tugasMendatangCount = 0;
+        let ujianBerikutnyaData = { nama: 'Tidak ada', tanggal: 'Tidak ada jadwal' };
+        let materiTerbaruData = [];
+        let pengumumanTerbaruData = null;
+
+        if (ids.length > 0) {
+          const tugasQuery = query(collection(db, 'tugas'), where('kelas', 'in', ids), where('deadline', '>=', Timestamp.now()));
+          const ujianQuery = query(collection(db, 'ujian'), where('kelas', 'in', ids), where('date', '>=', Timestamp.now()), orderBy('date', 'asc'), limit(1));
+          const materiQuery = query(collection(db, 'materi'), where('kelas', 'in', ids), orderBy('createdAt', 'desc'), limit(4));
+          const pengumumanQuery = query(collection(db, 'pengumuman'), where('kelas', 'in', ids), orderBy('createdAt', 'desc'), limit(1));
+
+          const [tugasSnap, ujianSnap, materiSnap, pengumumanSnap] = await Promise.all([
+            getDocs(tugasQuery), getDocs(ujianQuery), getDocs(materiQuery), getDocs(pengumumanQuery)
+          ]);
+
+          tugasMendatangCount = tugasSnap.size;
+          materiTerbaruData = materiSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+          if (!pengumumanSnap.empty) {
+            pengumumanTerbaruData = pengumumanSnap.docs[0].data();
+          }
+
+          if (!ujianSnap.empty) {
+            const ujian = ujianSnap.docs[0].data();
+            const kelasUjianRef = doc(db, 'kelas', ujian.kelas);
+            const kelasUjianSnap = await getDoc(kelasUjianRef);
+            const namaKelasUjian = kelasUjianSnap.exists() ? kelasUjianSnap.data().namaKelas : 'Ujian';
+            
+            ujianBerikutnyaData = {
+              nama: `${namaKelasUjian} - ${ujian.name}`,
+              tanggal: ujian.date.toDate().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
+            };
+          }
+        }
+        
+        setDashboardData({
+          tugasMendatang: tugasMendatangCount,
+          ujianBerikutnya: ujianBerikutnyaData,
+          materiTerbaru: materiTerbaruData,
+          pengumumanTerbaru: pengumumanTerbaruData,
+        });
+
+      } catch (err) {
+        console.error("Error fetching dashboard data:", err);
+        setError("Gagal memuat data dashboard.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const unsubscribeAuth = auth.onAuthStateChanged(user => {
+      if (user) {
+        fetchDashboardData(user.uid);
+      } else {
+        setLoading(false);
+      }
+    });
+    return () => unsubscribeAuth();
+  }, []);
+
+  if (loading) {
+      return (
+          <MainLayout>
+              <div className="flex justify-center items-center h-screen">
+                  <Loader className="animate-spin text-orange-500" size={48} />
+              </div>
+          </MainLayout>
+      );
+  }
+
+  if (error) {
+      return (
+          <MainLayout>
+              <div className="flex flex-col justify-center items-center h-screen text-center p-4">
+                  <AlertTriangle className="text-red-500 mb-4" size={48} />
+                  <h2 className="text-xl font-semibold text-gray-700">Terjadi Kesalahan</h2>
+                  <p className="text-gray-500">{error}</p>
+              </div>
+          </MainLayout>
+      );
+  }
+
   return (
     <MainLayout>
       <main className="flex-1 md:ml-64 md:pt-16 p-4 md:p-6 lg:p-8 bg-gradient-to-br from-slate-50 to-gray-100 min-h-screen mt-15">
-        {/* Kartu putih besar sebagai latar belakang konten dashboard */}
         <div className="max-w-full mx-auto bg-white rounded-xl shadow-xl p-6 md:p-8">
-          <div className="mb-8 animate-fade-in-up" style={{animationDelay: '0.1s'}}>
-            {/* Judul halaman ini idealnya di-handle oleh Navbar di MainLayout */}
+          <div className="mb-8 animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
             <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Dashboard Saya</h1>
-            <p className="text-gray-600 mt-1">Selamat datang kembali! Pantau progres belajar Anda di sini.</p>
+            <p className="text-gray-600 mt-1">Selamat datang kembali, {namaMurid}! Pantau progres belajar Anda di sini.</p>
           </div>
+          
+          <div className="space-y-6">
+            {/* --- BARIS ATAS: 2 KARTU --- */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <DashboardCard
+                title="Tugas Mendatang"
+                value={dashboardData.tugasMendatang}
+                icon={Edit}
+                bgColorClasses="bg-gradient-to-br from-yellow-500 to-amber-600"
+                link="/murid/tugas"
+                linkText="Lihat Semua Tugas"
+                animationDelay="0.2s"
+              />
+              <DashboardCard
+                title="Ujian Berikutnya"
+                value={dashboardData.ujianBerikutnya.nama}
+                subValue={dashboardData.ujianBerikutnya.tanggal}
+                icon={ListChecks}
+                bgColorClasses="bg-gradient-to-br from-purple-500 to-purple-700"
+                link="/murid/ujian"
+                linkText="Lihat Jadwal Ujian"
+                animationDelay="0.3s"
+              />
+            </div>
 
-          {/* Grid Kartu Ringkasan Berwarna */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5 sm:gap-6 mb-8">
-            <DashboardCard
-              title="Kursus Diikuti"
-              value={dashboardData.kursusDiikuti}
-              subValue="Total kursus aktif"
-              icon={BookOpen}
-              bgColorClasses="bg-gradient-to-br from-blue-500 to-blue-700"
-              link="/murid/kelas" 
-              linkText="Lihat Semua Kursus"
-              animationDelay="0.2s"
-            />
-            <DashboardCard
-              title="Progres Belajar"
-              value={dashboardData.progresRataRata}
-              subValue="Rata-rata penyelesaian"
-              icon={PlayCircle} 
-              bgColorClasses="bg-gradient-to-br from-green-500 to-green-700"
-              link="/murid/progres" 
-              linkText="Lihat Detail Progres"
-              animationDelay="0.3s"
-            />
-            <DashboardCard
-              title="Tugas Mendatang"
-              value={dashboardData.tugasMendatang}
-              subValue="Perlu dikerjakan segera"
-              icon={Edit} // Bisa diganti dengan FilePenLine jika lebih sesuai
-              bgColorClasses="bg-gradient-to-br from-yellow-500 to-amber-600" // Menggunakan amber untuk variasi kuning
-              link="/murid/kelas/tugas" 
-              linkText="Lihat Semua Tugas"
-              animationDelay="0.4s"
-            />
-            <DashboardCard
-              title="Ujian Berikutnya"
-              value={dashboardData.ujianBerikutnya.split('-')[0].trim()} 
-              subValue={dashboardData.ujianBerikutnya.split('-')[1]?.trim()} 
-              icon={ListChecks}
-              bgColorClasses="bg-gradient-to-br from-purple-500 to-purple-700"
-              link="/murid/kelas/ujian" 
-              linkText="Lihat Jadwal Ujian"
-              animationDelay="0.5s"
-            />
-          </div>
-
-          {/* Bagian lain dashboard murid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="md:col-span-2 bg-slate-50 p-6 rounded-xl shadow-inner animate-fade-in-up" style={{animationDelay: '0.6s'}}>
+            {/* --- BARIS BAWAH: 3 BLOK --- */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Kolom 1: Materi Terbaru */}
+              <div className="bg-slate-50 p-6 rounded-xl shadow-inner animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
                 <h2 className="text-xl font-semibold text-gray-700 mb-4">Materi Terbaru</h2>
-                <ul className="space-y-3">
-                    <li className="flex items-center justify-between p-3 bg-white rounded-lg hover:bg-gray-50 transition-colors duration-150 shadow-sm">
-                        <div className="flex items-center">
-                            <FileText size={20} className="text-orange-500 mr-3 flex-shrink-0"/>
-                            <span className="text-sm text-gray-700">Pengenalan Aljabar Linear Bab 1</span>
+                {dashboardData.materiTerbaru.length > 0 ? (
+                  <ul className="space-y-3">
+                    {dashboardData.materiTerbaru.map(materi => (
+                      <li key={materi.id} className="flex items-center justify-between p-3 bg-white rounded-lg hover:bg-gray-50 transition-colors duration-150 shadow-sm">
+                        <div className="flex items-center min-w-0">
+                           {materi.type === 'video' ? <Video size={20} className="text-blue-500 mr-3 flex-shrink-0" /> : <FileText size={20} className="text-red-500 mr-3 flex-shrink-0" />}
+                          <span className="text-sm text-gray-700 truncate">{materi.name}</span>
                         </div>
-                        <Link href="#" className="text-xs text-orange-600 hover:underline font-medium">Lihat</Link>
-                    </li>
-                    <li className="flex items-center justify-between p-3 bg-white rounded-lg hover:bg-gray-50 transition-colors duration-150 shadow-sm">
-                         <div className="flex items-center">
-                            <Video size={20} className="text-orange-500 mr-3 flex-shrink-0"/>
-                            <span className="text-sm text-gray-700">Video: Konsep Dasar Kalkulus</span>
-                        </div>
-                        <Link href="#" className="text-xs text-orange-600 hover:underline font-medium">Tonton</Link>
-                    </li>
-                </ul>
-            </div>
-            <div className="bg-slate-50 p-6 rounded-xl shadow-inner animate-fade-in-up" style={{animationDelay: '0.7s'}}>
+                        <Link href={`/murid/materi`} className="text-xs text-orange-600 hover:underline font-medium flex-shrink-0 ml-4">
+                          Lihat
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-gray-500 text-center py-4">Belum ada materi baru.</p>
+                )}
+              </div>
+
+              {/* Kolom 2: Pengumuman */}
+              <div className="bg-slate-50 p-6 rounded-xl shadow-inner animate-fade-in-up" style={{ animationDelay: '0.5s' }}>
                 <h2 className="text-xl font-semibold text-gray-700 mb-4">Pengumuman</h2>
-                <div className="text-sm text-gray-600 p-4 bg-blue-50 border-l-4 border-blue-500 rounded-md">
-                    <p className="font-medium text-blue-700">Penting!</p>
-                    <p className="mt-1">Ujian Tengah Semester akan dilaksanakan minggu depan. Persiapkan diri Anda dengan baik!</p>
-                </div>
+                {dashboardData.pengumumanTerbaru ? (
+                   <div className="text-sm text-gray-600 p-4 bg-blue-50 border-l-4 border-blue-500 rounded-md">
+                     <p className="font-medium text-blue-700">Penting!</p>
+                     <p className="mt-1">{dashboardData.pengumumanTerbaru.isi}</p>
+                   </div>
+                ): (
+                  <p className="text-sm text-gray-500 text-center py-4">Tidak ada pengumuman baru.</p>
+                )}
+              </div>
+
+              {/* Kolom 3: Kalender */}
+              <div className="bg-slate-50/50 p-4 rounded-xl shadow-inner animate-fade-in-up" style={{ animationDelay: '0.6s' }}>
+                <h2 className="text-xl font-semibold text-gray-700 mb-2 text-center">Kalender Akademik</h2>
+                <DashboardCalendar enrolledKelasIds={enrolledKelasIds} />
+              </div>
             </div>
           </div>
-
         </div>
         <style jsx>{`
           @keyframes fadeInUp {

@@ -1,16 +1,16 @@
+'use client';
+
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { useState, useEffect } from "react";
 import {
   LayoutDashboard,
-  Users,
   BookText,
   MonitorPlay,
   FileText,
   ListChecks,
   Edit,
   ClipboardCheck,
-  Settings,
   ChevronDown,
   ChevronUp,
 } from 'lucide-react';
@@ -18,13 +18,14 @@ import {
 const SansLogo = () => (
   <div className="flex flex-col items-center justify-center py-4">
     <img
-      src="/logo.png"
+      src="/logo.png" // Pastikan path logo benar
       alt="CoderChamps Logo"
       className="h-12 w-auto"
     />
   </div>
 );
 
+// Bagian "Konfigurasi" dan item "Setting" telah dihapus dari array ini.
 const menuItems = [
   {
     section: "Main Menu",
@@ -47,22 +48,18 @@ const menuItems = [
       },
     ],
   },
-  {
-    section: "Konfigurasi",
-    items: [{ name: "Setting", path: "/murid/setting", icon: <Settings size={20} /> }],
-  },
 ];
 
 const activeBg = "bg-orange-100";
 const activeTextColor = "text-orange-600";
 const activeFontWeight = "font-semibold";
-const hoverBg = "hover:bg-orange-400";
-const hoverTextColor = "hover:text-gray-50";
+const hoverBg = "hover:bg-orange-500";
+const hoverTextColor = "hover:text-white";
 const defaultTextColor = "text-gray-700";
 const defaultIconColor = "text-gray-500";
 const activeIconColor = "text-orange-500";
 
-export default function Sidebar() {
+export default function SidebarMurid() {
   const [openMenus, setOpenMenus] = useState({});
   const router = useRouter();
 
@@ -87,7 +84,7 @@ export default function Sidebar() {
 
   return (
     <aside className="w-64 h-screen bg-white shadow-xl fixed top-0 left-0 overflow-y-auto flex flex-col">
-      <div className="px-2 border-gray-200">
+      <div className="px-2 border-b border-gray-100">
         <SansLogo />
       </div>
       <nav className="flex-1 flex flex-col space-y-1 p-3">
@@ -105,36 +102,27 @@ export default function Sidebar() {
                     <div key={item.name}>
                       <button
                         onClick={() => toggleMenu(item.name)}
-                        className={`group flex items-center justify-between w-full px-3 py-2.5 rounded-md text-sm transition-colors duration-150
-                          ${isOpen ? `${hoverBg} ${defaultTextColor}` : `${defaultTextColor} ${hoverBg} ${hoverTextColor}`}
-                          ${parentIsActive && !isOpen ? `${activeTextColor} ${activeFontWeight}` : ''}
-                        `}
+                        className={`group flex items-center justify-between w-full px-3 py-2.5 rounded-md text-sm transition-colors duration-150 ${defaultTextColor} ${hoverBg} ${hoverTextColor}`}
                       >
                         <div className="flex items-center space-x-3">
-                          {/* PERUBAHAN ICON COLOR DI SINI */}
                           <span className={`${parentIsActive || isOpen ? activeIconColor : defaultIconColor} group-hover:text-white transition-colors duration-150`}>
-                            {item.icon || <span className="w-5 h-5"></span>}
+                            {item.icon}
                           </span>
-                          <span className={parentIsActive && !isOpen ? 'font-medium' : ''}>{item.name}</span>
+                          <span className={parentIsActive ? 'font-medium' : ''}>{item.name}</span>
                         </div>
-                        {isOpen ? <ChevronUp size={18} className="text-gray-500 group-hover:text-white transition-colors duration-150"/> : <ChevronDown size={18} className="text-gray-500 group-hover:text-white transition-colors duration-150"/>}
+                        {isOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                       </button>
                       {isOpen && (
                         <div className="pl-5 mt-1 space-y-0.5 border-l-2 border-orange-200 ml-[18px] mr-1 py-1">
                           {item.children.map((subItem) => (
-                            <Link
-                              key={subItem.name}
-                              href={subItem.path}
-                              passHref
+                            <Link key={subItem.name} href={subItem.path} passHref
                               className={`group flex items-center space-x-2.5 w-full px-3 py-2 rounded-md text-xs 
                                 ${ isActivePath(subItem.path)
                                     ? `${activeBg} ${activeTextColor} ${activeFontWeight}`
-                                    : `${defaultTextColor.replace('700', '600')} ${hoverBg} ${hoverTextColor}`
-                                } transition-colors duration-150`}
-                            >
-                              {/* PERUBAHAN ICON COLOR DI SINI */}
-                              <span className={`${isActivePath(subItem.path) ? activeIconColor : defaultIconColor.replace('500', '400')} group-hover:text-white transition-colors duration-150`}>
-                                {subItem.icon || <span className="w-[18px] h-[18px]"></span>}
+                                    : `text-gray-600 ${hoverBg} ${hoverTextColor}`
+                                } transition-colors duration-150`}>
+                              <span className={`${isActivePath(subItem.path) ? activeIconColor : 'text-gray-400'} group-hover:text-white transition-colors duration-150`}>
+                                {subItem.icon}
                               </span>
                               <span>{subItem.name}</span>
                             </Link>
@@ -151,11 +139,9 @@ export default function Sidebar() {
                       ${ isActivePath(item.path)
                           ? `${activeBg} ${activeTextColor} ${activeFontWeight}`
                           : `${defaultTextColor} ${hoverBg} ${hoverTextColor}`
-                      } transition-colors duration-150`}
-                  >
-                    {/* PERUBAHAN ICON COLOR DI SINI */}
+                      } transition-colors duration-150`}>
                     <span className={`${isActivePath(item.path) ? activeIconColor : defaultIconColor} group-hover:text-white transition-colors duration-150`}>
-                      {item.icon || <span className="w-5 h-5"></span>}
+                      {item.icon}
                     </span>
                     <span>{item.name}</span>
                   </Link>

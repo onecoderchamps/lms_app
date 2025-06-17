@@ -8,7 +8,7 @@ import { createUserWithEmailAndPassword } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
 import { auth, db } from "@/api/firebaseConfig";
 
-export default function RegisterGuruPage() {
+export default function RegistermuridPage() {
   const router = useRouter();
 
   const [namaLengkap, setNamaLengkap] = useState("");
@@ -65,7 +65,7 @@ export default function RegisterGuruPage() {
   const primaryBorderColor = `focus:border-${primaryColor}-500`;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-100 to-gray-200 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gradient-to-br from-orange-400 to-orange-600 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="mt-2 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-8 px-6 shadow-xl sm:rounded-xl sm:px-10">
           <Head>
@@ -169,7 +169,7 @@ export default function RegisterGuruPage() {
                 className={`w-full flex items-center justify-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white ${primaryButtonBg} ${primaryButtonHoverBg} focus:outline-none focus:ring-2 focus:ring-offset-2 ${primaryRingColor} transition duration-150`}
               >
                 <UserPlus size={18} className="mr-2" />
-                {loading ? "Mendaftarkan..." : "Daftar Akun Guru"}
+                {loading ? "Mendaftarkan..." : "Daftar Akun Murid"}
               </button>
             </div>
           </form>
