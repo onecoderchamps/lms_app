@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
-import MainLayout from './layouts/MainLayout'; // Pastikan path ini benar
-import { PlusCircle, X, CalendarDays, Clock, Link as LinkIcon, Trash2, Video, Edit, ArrowLeft } from 'lucide-react';
-import { app } from "../../api/firebaseConfig"; // Pastikan path ini benar
+import MainLayout from './layouts/MainLayout'; // Path ini dipertahankan sesuai permintaan
+import { PlusCircle, X, CalendarDays, Clock, Link as LinkIcon, Trash2, Video, Edit } from 'lucide-react';
+import { app } from "../../api/firebaseConfig"; // Path ini dipertahankan sesuai permintaan
 import {
   getFirestore,
   collection,
@@ -16,15 +16,23 @@ import {
   orderBy,
   serverTimestamp,
 } from 'firebase/firestore';
+// --- BARU: Menambahkan impor untuk Firebase Storage ---
+import { 
+  getStorage, 
+  ref, 
+  uploadBytesResumable, 
+  getDownloadURL,
+  deleteObject
+} from 'firebase/storage';
 
 const db = getFirestore(app);
+// --- BARU: Inisialisasi Firebase Storage ---
+const storage = getStorage(app);
 
 export default function SesiLivePage() {
   const router = useRouter();
   const [liveSessions, setLiveSessions] = useState([]);
   const [loading, setLoading] = useState(true);
-
-  // State untuk menyimpan kelas yang aktif dari localStorage
   const [activeClass, setActiveClass] = useState({ id: null, name: null });
 
   // State untuk modal tambah
@@ -33,10 +41,19 @@ export default function SesiLivePage() {
   const [sessionDate, setSessionDate] = useState('');
   const [sessionTime, setSessionTime] = useState('');
   const [sessionLink, setSessionLink] = useState('');
-
+  // --- BARU: State untuk gambar di form tambah ---
+  const [sessionImage, setSessionImage] = useState(null);
+  const addImageInputRef = useRef(null);
+  
   // State untuk modal edit
   const [showEditSessionModal, setShowEditSessionModal] = useState(false);
   const [editingSession, setEditingSession] = useState(null);
+  // --- BARU: State untuk gambar di form edit ---
+  const [editedSessionImage, setEditedSessionImage] = useState(null);
+  const editImageInputRef = useRef(null);
+
+  // State umum untuk proses submit
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // State untuk modal hapus dan alert
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
@@ -46,11 +63,9 @@ export default function SesiLivePage() {
   const [alertType, setAlertType] = useState('success');
   const [hasMounted, setHasMounted] = useState(false);
 
-  // useEffect untuk mengambil ID kelas dari localStorage saat komponen mount
   useEffect(() => {
     const classId = localStorage.getItem('idKelas');
     const className = localStorage.getItem('namaKelas');
-
     if (classId && className) {
       setActiveClass({ id: classId, name: className });
     } else {
@@ -59,20 +74,17 @@ export default function SesiLivePage() {
     setHasMounted(true);
   }, []);
 
-  // useEffect untuk mengambil data sesi live berdasarkan kelas yang aktif
   useEffect(() => {
     if (!activeClass.id) {
-        setLiveSessions([]);
-        return;
+      setLiveSessions([]);
+      return;
     }
-
     setLoading(true);
     const q = query(
       collection(db, "sesiLive"),
       where("kelas", "==", activeClass.id),
       orderBy("createdAt", "desc")
     );
-
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setLiveSessions(data);
@@ -82,7 +94,6 @@ export default function SesiLivePage() {
       showCustomAlert('Gagal memuat data sesi live.', 'error');
       setLoading(false);
     });
-
     return () => unsubscribe();
   }, [activeClass.id]);
 
@@ -94,15 +105,30 @@ export default function SesiLivePage() {
 
   const resetAddForm = () => {
     setSessionName(''); setSessionDate(''); setSessionTime(''); setSessionLink('');
+    // --- BARU: Reset state gambar ---
+    setSessionImage(null);
+    if(addImageInputRef.current) addImageInputRef.current.value = "";
   };
-
+  
+  // --- DIUBAH: Logika handleAddSession diperbarui untuk mengunggah gambar ---
   const handleAddSession = async (e) => {
     e.preventDefault();
     if (!sessionName.trim() || !sessionDate || !sessionTime || !sessionLink.trim()) {
-      showCustomAlert('Semua field wajib diisi!', 'error');
-      return;
+      return showCustomAlert('Semua field wajib diisi!', 'error');
     }
+    setIsSubmitting(true);
     try {
+      let imageUrl = null;
+      let imagePath = null;
+      if (sessionImage) {
+        const filePath = `sesiLiveBanners/${activeClass.id}/${Date.now()}_${sessionImage.name}`;
+        const storageRef = ref(storage, filePath);
+        const uploadTask = uploadBytesResumable(storageRef, sessionImage);
+        await uploadTask;
+        imageUrl = await getDownloadURL(storageRef);
+        imagePath = filePath;
+      }
+
       await addDoc(collection(db, "sesiLive"), {
         name: sessionName,
         date: sessionDate,
@@ -110,34 +136,67 @@ export default function SesiLivePage() {
         link: sessionLink,
         kelas: activeClass.id,
         createdAt: serverTimestamp(),
+        // --- BARU: Menambahkan field gambar ke Firestore ---
+        imageUrl: imageUrl, 
+        imagePath: imagePath,
       });
       resetAddForm();
       setShowAddSessionModal(false);
       showCustomAlert('Sesi live berhasil dijadwalkan!', 'success');
     } catch (error) {
       showCustomAlert('Gagal menambahkan sesi: ' + error.message, 'error');
+    } finally {
+        setIsSubmitting(false);
     }
   };
 
   const handleOpenEditModal = (session) => {
     setEditingSession({ ...session });
+    // --- BARU: Reset state gambar saat modal edit dibuka ---
+    setEditedSessionImage(null);
+    if(editImageInputRef.current) editImageInputRef.current.value = "";
     setShowEditSessionModal(true);
   };
   
+  // --- DIUBAH: Logika handleSaveEdit diperbarui untuk mengunggah/mengubah gambar ---
   const handleSaveEdit = async (e) => {
     e.preventDefault();
     if (!editingSession || !editingSession.name.trim() || !editingSession.date || !editingSession.time || !editingSession.link.trim()) {
-      showCustomAlert('Semua field wajib diisi!', 'error');
-      return;
+      return showCustomAlert('Semua field wajib diisi!', 'error');
     }
+    setIsSubmitting(true);
+
     const sessionDocRef = doc(db, "sesiLive", editingSession.id);
     try {
-      const { id, createdAt, kelas, ...dataToUpdate } = editingSession;
+        const dataToUpdate = {
+            name: editingSession.name,
+            date: editingSession.date,
+            time: editingSession.time,
+            link: editingSession.link,
+            updatedAt: serverTimestamp(),
+        };
+
+        if (editedSessionImage) {
+            // Hapus gambar lama jika ada
+            if (editingSession.imagePath) {
+                const oldImageRef = ref(storage, editingSession.imagePath);
+                await deleteObject(oldImageRef).catch(err => console.error("Gagal hapus gambar lama:", err));
+            }
+            // Unggah gambar baru
+            const newImagePath = `sesiLiveBanners/${activeClass.id}/${Date.now()}_${editedSessionImage.name}`;
+            const newImageRef = ref(storage, newImagePath);
+            await uploadBytesResumable(newImageRef, editedSessionImage);
+            dataToUpdate.imageUrl = await getDownloadURL(newImageRef);
+            dataToUpdate.imagePath = newImagePath;
+        }
+
       await updateDoc(sessionDocRef, dataToUpdate);
       showCustomAlert('Sesi live berhasil diperbarui!', 'success');
       setShowEditSessionModal(false);
     } catch (error) {
       showCustomAlert("Gagal memperbarui sesi.", "error");
+    } finally {
+        setIsSubmitting(false);
     }
   };
 
@@ -148,15 +207,25 @@ export default function SesiLivePage() {
     setShowDeleteConfirmModal(true);
   };
 
+  // --- DIUBAH: Logika handleDeleteSession diperbarui untuk menghapus gambar dari storage ---
   const handleDeleteSession = async () => {
     if (!sessionToDelete) return;
+    setIsSubmitting(true);
     try {
+      // Hapus gambar dari storage jika ada
+      if (sessionToDelete.imagePath) {
+        const imageRef = ref(storage, sessionToDelete.imagePath);
+        await deleteObject(imageRef).catch(err => console.error("Gagal hapus gambar:", err));
+      }
+      // Hapus dokumen dari firestore
       await deleteDoc(doc(db, "sesiLive", sessionToDelete.id));
       showCustomAlert('Sesi live berhasil dihapus!', 'success');
       setSessionToDelete(null);
       setShowDeleteConfirmModal(false);
     } catch (error) {
       showCustomAlert("Gagal menghapus sesi.", "error");
+    } finally {
+        setIsSubmitting(false);
     }
   };
   
@@ -190,110 +259,107 @@ export default function SesiLivePage() {
               <p className="text-sm text-gray-400 mt-2">Klik "Jadwalkan Sesi Baru" untuk menambahkan.</p>
             </div>
           ) : (
-            <ul className="space-y-5">
+            // --- DIUBAH: Tampilan diubah menjadi format kartu (card) ---
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
               {liveSessions.map((session, index) => (
-                <li 
+                <div 
                   key={session.id} 
-                  className={`bg-white border border-gray-200 rounded-lg p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between shadow-sm hover:shadow-lg transition-shadow duration-200 ${hasMounted ? 'animate-fade-in-up' : 'opacity-0'}`}
+                  className={`bg-white border border-gray-200 rounded-xl flex flex-col shadow-sm hover:shadow-lg transition-shadow duration-300 ${hasMounted ? 'animate-fade-in-up' : 'opacity-0'}`}
                   style={{ animationDelay: hasMounted ? `${(index * 0.05) + 0.2}s` : '0s' }}
                 >
-                  <div className="flex items-start space-x-4 mb-4 sm:mb-0 flex-grow min-w-0">
-                    <div className="text-purple-600 pt-1 bg-purple-50 p-2.5 rounded-full">
-                      <Video size={24} />
-                    </div>
-                    <div className="flex-grow min-w-0">
-                      <p className="font-semibold text-lg text-gray-800 truncate" title={session.name}>{session.name}</p>
-                      <div className="flex items-center text-gray-600 text-sm mt-2 flex-wrap gap-x-4 gap-y-1">
+                  <a href={session.link} target="_blank" rel="noopener noreferrer" className="cursor-pointer group">
+                    <img 
+                      src={session.imageUrl || `https://placehold.co/600x400/f97316/ffffff?text=Live`} 
+                      alt={`Banner untuk ${session.name}`}
+                      className="w-full h-40 object-cover rounded-t-xl"
+                      onError={(e) => { e.target.onerror = null; e.target.src=`https://placehold.co/600x400/f97316/ffffff?text=Live`}}
+                    />
+                  </a>
+                  <div className="p-4 flex flex-col flex-grow">
+                     <h3 className="font-bold text-lg text-gray-800 flex-grow" title={session.name}>{session.name}</h3>
+                     <div className="flex items-center text-gray-600 text-sm mt-2 flex-wrap gap-x-4 gap-y-1">
                         <div className="flex items-center">
                           <CalendarDays size={16} className="mr-1.5 text-gray-400" />
-                          <span>{new Date(session.date).toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                          <span>{new Date(session.date).toLocaleDateString('id-ID', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
                         </div>
                         <div className="flex items-center">
                           <Clock size={16} className="mr-1.5 text-gray-400" />
                           <span>{session.time} WIB</span>
                         </div>
                       </div>
+                  </div>
+                   <div className="flex items-center justify-between p-4 border-t border-gray-100">
+                     <a href={session.link} target="_blank" rel="noreferrer" className="flex items-center text-sm font-medium text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-3.5 py-2 rounded-md transition duration-150">
+                        <LinkIcon size={16} className="mr-1.5" /> Buka Link
+                      </a>
+                    <div className="flex items-center space-x-1">
+                      <button onClick={() => handleOpenEditModal(session)} className="text-blue-600 hover:text-blue-800 p-2 rounded-md hover:bg-blue-100 transition-colors" aria-label="Edit Sesi">
+                        <Edit size={18} />
+                      </button>
+                      <button onClick={() => confirmDeleteSession(session)} className="text-red-600 hover:text-red-800 p-2 rounded-md hover:bg-red-100 transition-colors" aria-label="Hapus Sesi">
+                        <Trash2 size={18} />
+                      </button>
                     </div>
                   </div>
-                  <div className="flex items-center space-x-2 sm:space-x-3 justify-start sm:justify-end pt-3 sm:pt-0 border-t sm:border-t-0 border-gray-100 sm:border-transparent flex-shrink-0">
-                    <a href={session.link} target="_blank" rel="noreferrer" className="flex items-center text-sm font-medium text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-3.5 py-2 rounded-md transition duration-150">
-                      <LinkIcon size={16} className="mr-1.5" /> Buka Link
-                    </a>
-                    <button onClick={() => handleOpenEditModal(session)} className="text-blue-600 hover:text-blue-800 p-2 rounded-md hover:bg-blue-100 transition-colors" aria-label={`Edit sesi ${session.name}`}>
-                      <Edit size={18} />
-                    </button>
-                    <button onClick={() => confirmDeleteSession(session)} className="text-red-600 hover:text-red-800 p-2 rounded-md hover:bg-red-100 transition-colors" aria-label={`Hapus sesi ${session.name}`}>
-                      <Trash2 size={18} />
-                    </button>
-                  </div>
-                </li>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
         </div>
 
+        {/* Modal Tambah Sesi */}
         {showAddSessionModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto">
             <div className="bg-white rounded-xl shadow-xl p-7 w-full max-w-lg relative animate-fade-in-up my-8">
-              <button onClick={() => setShowAddSessionModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 transition duration-150" aria-label="Tutup modal">
-                <X size={24} />
-              </button>
+              <button onClick={() => setShowAddSessionModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-700" disabled={isSubmitting}><X size={24} /></button>
               <h2 className="text-xl font-semibold mb-6 text-center text-gray-800">Jadwalkan Sesi Live Baru</h2>
               <form onSubmit={handleAddSession} className="space-y-4">
-                <div>
-                  <label htmlFor="sessionName" className="block text-sm font-medium text-gray-700 mb-1">Nama Sesi / Topik</label>
-                  <input type="text" id="sessionName" value={sessionName} onChange={(e) => setSessionName(e.target.value)} placeholder="Contoh: Diskusi Aljabar Bab 3" className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition duration-150`} required />
-                </div>
+                <input type="text" value={sessionName} onChange={(e) => setSessionName(e.target.value)} placeholder="Nama Sesi / Topik" className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} required />
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label htmlFor="sessionDate" className="block text-sm font-medium text-gray-700 mb-1">Tanggal</label>
-                    <input type="date" id="sessionDate" value={sessionDate} onChange={(e) => setSessionDate(e.target.value)} className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition duration-150`} required />
-                  </div>
-                  <div>
-                    <label htmlFor="sessionTime" className="block text-sm font-medium text-gray-700 mb-1">Waktu</label>
-                    <input type="time" id="sessionTime" value={sessionTime} onChange={(e) => setSessionTime(e.target.value)} className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition duration-150`} required />
-                  </div>
+                  <input type="date" value={sessionDate} onChange={(e) => setSessionDate(e.target.value)} className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} required />
+                  <input type="time" value={sessionTime} onChange={(e) => setSessionTime(e.target.value)} className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} required />
                 </div>
+                <input type="url" value={sessionLink} onChange={(e) => setSessionLink(e.target.value)} placeholder="Link Sesi Live (Zoom/Meet)" className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} required />
+                {/* --- BARU: Input gambar di modal tambah --- */}
                 <div>
-                  <label htmlFor="sessionLink" className="block text-sm font-medium text-gray-700 mb-1">Link Sesi Live (Zoom/Meet)</label>
-                  <input type="url" id="sessionLink" value={sessionLink} onChange={(e) => setSessionLink(e.target.value)} placeholder="Contoh: https://zoom.us/j/..." className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition duration-150`} required />
+                   <label className="block text-sm font-medium text-gray-700 mb-1">Gambar Banner <span className="text-gray-400">(Opsional)</span></label>
+                   <input type="file" ref={addImageInputRef} onChange={(e) => setSessionImage(e.target.files[0])} className={`w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100 ${inputFocusColor} border border-gray-300 rounded-lg cursor-pointer`} accept="image/*" />
                 </div>
                 <div className="flex justify-end space-x-3 pt-4">
-                  <button type="button" onClick={() => setShowAddSessionModal(false)} className="px-5 py-2.5 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300">Batal</button>
-                  <button type="submit" className={`px-5 py-2.5 ${primaryButtonColor} ${primaryButtonTextColor} rounded-lg shadow-md`}>Jadwalkan Sesi</button>
+                  <button type="button" onClick={() => setShowAddSessionModal(false)} className="px-5 py-2.5 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300" disabled={isSubmitting}>Batal</button>
+                  <button type="submit" className={`px-5 py-2.5 ${primaryButtonColor} ${primaryButtonTextColor} rounded-lg shadow-md disabled:opacity-50`} disabled={isSubmitting}>
+                    {isSubmitting ? 'Menyimpan...' : 'Jadwalkan Sesi'}
+                  </button>
                 </div>
               </form>
             </div>
           </div>
         )}
 
+        {/* Modal Edit Sesi */}
         {showEditSessionModal && editingSession && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto">
+         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto">
             <div className="bg-white rounded-xl shadow-xl p-7 w-full max-w-lg relative animate-fade-in-up my-8">
               <button onClick={handleCancelEdit} className="absolute top-4 right-4 text-gray-400 hover:text-gray-700"><X size={24} /></button>
               <h2 className="text-xl font-semibold mb-6 text-center text-gray-800">Edit Sesi Live</h2>
               <form onSubmit={handleSaveEdit} className="space-y-4">
-                <div>
-                  <label htmlFor="editedSessionName" className="block text-sm font-medium text-gray-700 mb-1">Nama Sesi / Topik</label>
-                  <input type="text" id="editedSessionName" value={editingSession.name} onChange={(e) => setEditingSession({...editingSession, name: e.target.value})} className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} required />
-                </div>
+                <input type="text" value={editingSession.name} onChange={(e) => setEditingSession({...editingSession, name: e.target.value})} className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} required />
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label htmlFor="editedSessionDate" className="block text-sm font-medium text-gray-700 mb-1">Tanggal</label>
-                    <input type="date" id="editedSessionDate" value={editingSession.date} onChange={(e) => setEditingSession({...editingSession, date: e.target.value})} className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} required />
-                  </div>
-                  <div>
-                    <label htmlFor="editedSessionTime" className="block text-sm font-medium text-gray-700 mb-1">Waktu</label>
-                    <input type="time" id="editedSessionTime" value={editingSession.time} onChange={(e) => setEditingSession({...editingSession, time: e.target.value})} className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} required />
-                  </div>
+                    <input type="date" value={editingSession.date} onChange={(e) => setEditingSession({...editingSession, date: e.target.value})} className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} required />
+                    <input type="time" value={editingSession.time} onChange={(e) => setEditingSession({...editingSession, time: e.target.value})} className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} required />
                 </div>
+                <input type="url" value={editingSession.link} onChange={(e) => setEditingSession({...editingSession, link: e.target.value})} className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} required />
+                {/* --- BARU: Input gambar di modal edit --- */}
                 <div>
-                  <label htmlFor="editedSessionLink" className="block text-sm font-medium text-gray-700 mb-1">Link Sesi Live</label>
-                  <input type="url" id="editedSessionLink" value={editingSession.link} onChange={(e) => setEditingSession({...editingSession, link: e.target.value})} className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} required />
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Ganti Gambar Banner <span className="text-gray-400">(Opsional)</span></label>
+                    <input type="file" ref={editImageInputRef} onChange={(e) => setEditedSessionImage(e.target.files[0])} className={`w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100 ${inputFocusColor} border border-gray-300 rounded-lg cursor-pointer`} accept="image/*" />
+                    {editingSession.imageUrl && <p className="text-xs mt-1">Kosongkan jika tidak ingin mengganti gambar.</p>}
                 </div>
                 <div className="flex justify-end space-x-3 pt-4">
                   <button type="button" onClick={handleCancelEdit} className="px-5 py-2.5 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300">Batal</button>
-                  <button type="submit" className={`px-5 py-2.5 ${primaryButtonColor} ${primaryButtonTextColor} rounded-lg shadow-md`}>Simpan Perubahan</button>
+                  <button type="submit" className={`px-5 py-2.5 ${primaryButtonColor} ${primaryButtonTextColor} rounded-lg shadow-md disabled:opacity-50`} disabled={isSubmitting}>
+                    {isSubmitting ? 'Menyimpan...' : 'Simpan Perubahan'}
+                  </button>
                 </div>
               </form>
             </div>
@@ -304,34 +370,35 @@ export default function SesiLivePage() {
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
             <div className="bg-white rounded-xl shadow-xl p-7 w-full max-w-sm text-center animate-fade-in-up">
               <h3 className="text-xl font-semibold text-gray-800 mb-3">Konfirmasi Hapus</h3>
-              <p className="text-gray-600 mb-6 text-sm">Apakah Anda yakin ingin menghapus sesi <br/><strong className="text-gray-900">{sessionToDelete.name}</strong>?</p>
+              <p className="text-gray-600 mb-6 text-sm">Yakin hapus sesi <strong className="text-gray-900">{sessionToDelete.name}</strong>? Tindakan ini tidak dapat diurungkan.</p>
               <div className="flex justify-center space-x-3">
                 <button type="button" className="px-5 py-2.5 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300" onClick={() => setShowDeleteConfirmModal(false)}>Batal</button>
-                <button type="button" className="px-5 py-2.5 bg-red-600 text-white rounded-lg shadow-md hover:bg-red-700" onClick={handleDeleteSession}>Ya, Hapus</button>
+                <button type="button" disabled={isSubmitting} className="px-5 py-2.5 bg-red-600 text-white rounded-lg shadow-md hover:bg-red-700 disabled:opacity-50" onClick={handleDeleteSession}>
+                    {isSubmitting ? 'Menghapus...' : 'Ya, Hapus'}
+                </button>
               </div>
             </div>
           </div>
         )}
-
         {showAlertModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
              <div className={`bg-white rounded-xl shadow-xl p-7 w-full max-w-sm text-center animate-fade-in-up border-t-4 ${alertType === 'success' ? 'border-green-500' : 'border-red-500'}`}>
-              <h3 className={`text-xl font-semibold mb-3 ${alertType === 'success' ? 'text-green-700' : 'text-red-700'}`}>{alertType === 'success' ? 'Berhasil!' : 'Terjadi Kesalahan!'}</h3>
-              <p className="text-gray-600 mb-6 text-sm">{alertMessage}</p>
-              <button type="button" className={`px-6 py-2.5 rounded-lg shadow-md ${alertType === 'success' ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-red-600 hover:bg-red-700 text-white'}`} onClick={() => setShowAlertModal(false)}>Oke</button>
-            </div>
+               <h3 className={`text-xl font-semibold mb-3 ${alertType === 'success' ? 'text-green-700' : 'text-red-700'}`}>{alertType === 'success' ? 'Berhasil!' : 'Terjadi Kesalahan!'}</h3>
+               <p className="text-gray-600 mb-6 text-sm">{alertMessage}</p>
+               <button type="button" className={`px-6 py-2.5 rounded-lg shadow-md ${alertType === 'success' ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-red-600 hover:bg-red-700 text-white'}`} onClick={() => setShowAlertModal(false)}>Oke</button>
+             </div>
           </div>
         )}
         
         <style jsx>{`
-          @keyframes fadeInUp {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-          }
-          .animate-fade-in-up {
-            animation: fadeInUp 0.4s ease-out forwards;
-            opacity: 0; 
-          }
+            @keyframes fadeInUp {
+              from { opacity: 0; transform: translateY(20px); }
+              to { opacity: 1; transform: translateY(0); }
+            }
+            .animate-fade-in-up {
+              animation: fadeInUp 0.4s ease-out forwards;
+              opacity: 0; 
+            }
         `}</style>
       </main>
     </MainLayout>

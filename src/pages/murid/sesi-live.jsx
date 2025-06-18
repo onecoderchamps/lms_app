@@ -130,7 +130,7 @@ export default function MuridLiveSessionPage() {
               <p className="text-sm text-gray-400 mt-2">Anda mungkin belum bergabung dengan kelas manapun, atau belum ada jadwal dari guru.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
               {liveSessions.map((session, index) => {
                 const { color: statusColor, text: statusText, status: sessionStatus } = getSessionStatus(session.date, session.time);
                 

@@ -1,23 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
-import MainLayout from "./layouts/MainLayout";
-import { app } from "../../api/firebaseConfig";
 import {
-  getFirestore,
-  collection,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  doc,
-  onSnapshot,
-  query,
-  where,
-  orderBy,
-  serverTimestamp,
-} from "firebase/firestore";
-import { PlusCircle, X, CalendarDays, Clock, PlayCircle, CheckSquare, Hourglass, Edit, Trash2, FileText, Video, ArrowLeft } from 'lucide-react';
+  getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot,
+  query, where, orderBy, serverTimestamp,
+} from 'firebase/firestore';
+import { getStorage, ref, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage";
+import { app } from "../../api/firebaseConfig"; // Sesuaikan path jika perlu
+import MainLayout from "./layouts/MainLayout"; // Sesuaikan path jika perlu
+import { PlusCircle, X, CalendarDays, Clock, PlayCircle, CheckSquare, Hourglass, Edit, Trash2, FileText } from 'lucide-react';
 
 const db = getFirestore(app);
+const storage = getStorage(app);
 
 export default function UjianPage() {
   const router = useRouter();
@@ -28,18 +21,19 @@ export default function UjianPage() {
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [ujianName, setUjianName] = useState("");
-  const [fileSoalUrl, setFileSoalUrl] = useState("");
-  const [fileVideoUrl, setFileVideoUrl] = useState("");
   const [tanggalUjian, setTanggalUjian] = useState("");
   const [waktuUjian, setWaktuUjian] = useState("");
   const [durasiUjian, setDurasiUjian] = useState(90);
+  const [coverImage, setCoverImage] = useState(null);
+  const addCoverImageInputRef = useRef(null);
 
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingUjian, setEditingUjian] = useState(null);
+  const [editedCoverImage, setEditedCoverImage] = useState(null);
+  const editCoverImageInputRef = useRef(null);
 
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
   const [ujianToDelete, setUjianToDelete] = useState(null);
-  
   const [showAlertModal, setShowAlertModal] = useState(false);
   const [alertMessage, setAlertMessage] = useState('');
   const [alertType, setAlertType] = useState('success');
@@ -86,16 +80,16 @@ export default function UjianPage() {
   }, [activeClass.id]);
 
   const getUjianStatusForGuruDisplay = (ujianDate, ujianTime, durationMinutes) => {
-    const ujianStartDateTime = new Date(`<span class="math-inline">\{ujianDate\}T</span>{ujianTime}:00`);
+    const ujianStartDateTime = new Date(`${ujianDate}T${ujianTime}:00`);
     const ujianEndDateTime = new Date(ujianStartDateTime.getTime() + durationMinutes * 60000);
     const now = currentTime;
 
     if (now < ujianStartDateTime) {
-      return { text: 'Akan Datang', colorClass: 'bg-indigo-100 text-indigo-700', icon: <Hourglass size={22} /> };
+      return { text: 'Akan Datang', colorClass: 'bg-indigo-100 text-indigo-700' };
     } else if (now >= ujianStartDateTime && now < ujianEndDateTime) {
-      return { text: 'Sedang Berlangsung', colorClass: 'bg-yellow-100 text-yellow-700 animate-pulse', icon: <PlayCircle size={22} /> };
+      return { text: 'Berlangsung', colorClass: 'bg-yellow-100 text-yellow-700 animate-pulse' };
     } else {
-      return { text: 'Sudah Selesai', colorClass: 'bg-green-100 text-green-700', icon: <CheckSquare size={22} /> };
+      return { text: 'Selesai', colorClass: 'bg-green-100 text-green-700' };
     }
   };
 
@@ -106,31 +100,47 @@ export default function UjianPage() {
   };
 
   const resetAddForm = () => {
-    setUjianName(''); setFileSoalUrl(''); setFileVideoUrl('');
+    setUjianName('');
     setTanggalUjian(''); setWaktuUjian(''); setDurasiUjian(90);
+    setCoverImage(null);
+    if (addCoverImageInputRef.current) addCoverImageInputRef.current.value = "";
   };
   
+  const uploadFile = async (file, path) => {
+    if (!file) return null;
+    const filePath = `${path}/${Date.now()}_${file.name}`;
+    const fileRef = ref(storage, filePath);
+    await uploadBytesResumable(fileRef, file);
+    const downloadURL = await getDownloadURL(fileRef);
+    return { url: downloadURL, path: filePath };
+  };
+
   const handleAddUjian = async (e) => {
     e.preventDefault();
-    if (!ujianName.trim() || !fileSoalUrl.trim() || !tanggalUjian || !waktuUjian || !durasiUjian) {
-      showCustomAlert('Semua field (kecuali URL Video) wajib diisi!', 'error');
+    if (!ujianName.trim() || !tanggalUjian || !waktuUjian || !durasiUjian) {
+      showCustomAlert('Nama, Tanggal, Waktu, dan Durasi Ujian wajib diisi!', 'error');
       return;
     }
     setIsSubmitting(true);
     try {
+      const coverImageUpload = await uploadFile(coverImage, `ujian/${activeClass.id}/covers`);
+      
       await addDoc(collection(db, 'ujian'), {
         kelas: activeClass.id,
         name: ujianName, 
-        fileSoalUrl: fileSoalUrl,
-        fileVideoUrl: fileVideoUrl.trim() || null,
         date: tanggalUjian, 
         time: waktuUjian,
         durationMinutes: parseInt(durasiUjian, 10),
+        coverImageUrl: coverImageUpload?.url || null,
+        coverImagePath: coverImageUpload?.path || null,
         createdAt: serverTimestamp()
       });
+      
       resetAddForm();
       setShowAddModal(false);
-      showCustomAlert('Ujian berhasil ditambahkan!', 'success');
+      // --- DIUBAH: Pesan notifikasi disesuaikan ---
+      showCustomAlert('Jadwal ujian berhasil disimpan!', 'success');
+
     } catch (error) {
       showCustomAlert('Gagal menambahkan ujian.', 'error');
     } finally {
@@ -143,20 +153,32 @@ export default function UjianPage() {
         ...ujian,
         durationMinutes: ujian.durationMinutes || 90
     });
+    setEditedCoverImage(null);
+    if (editCoverImageInputRef.current) editCoverImageInputRef.current.value = "";
     setShowEditModal(true);
   };
 
   const handleSaveEditUjian = async (e) => {
     e.preventDefault();
-    if (!editingUjian || !editingUjian.name.trim() || !editingUjian.fileSoalUrl.trim() || !editingUjian.date || !editingUjian.time || !editingUjian.durationMinutes) {
-      showCustomAlert('Semua field (kecuali URL Video) wajib diisi!', 'error');
+    if (!editingUjian || !editingUjian.name.trim() || !editingUjian.date || !editingUjian.time || !editingUjian.durationMinutes) {
+      showCustomAlert('Semua field wajib diisi!', 'error');
       return;
     }
     const ujianDocRef = doc(db, "ujian", editingUjian.id);
     setIsSubmitting(true);
     try {
-      const { id, createdAt, kelas, ...dataToUpdate } = editingUjian;
+      const { id, createdAt, kelas, fileSoalUrl, fileVideoUrl, ...dataToUpdate } = editingUjian;
       dataToUpdate.updatedAt = serverTimestamp();
+
+      if (editedCoverImage) {
+        if (editingUjian.coverImagePath) {
+            await deleteObject(ref(storage, editingUjian.coverImagePath)).catch(console.error);
+        }
+        const upload = await uploadFile(editedCoverImage, `ujian/${activeClass.id}/covers`);
+        dataToUpdate.coverImageUrl = upload.url;
+        dataToUpdate.coverImagePath = upload.path;
+      }
+
       await updateDoc(ujianDocRef, dataToUpdate);
       setShowEditModal(false);
       showCustomAlert('Data ujian berhasil diperbarui!', 'success');
@@ -178,6 +200,9 @@ export default function UjianPage() {
     if (!ujianToDelete) return;
     setIsSubmitting(true);
     try {
+      if (ujianToDelete.coverImagePath) {
+        await deleteObject(ref(storage, ujianToDelete.coverImagePath)).catch(console.error);
+      }
       await deleteDoc(doc(db, "ujian", ujianToDelete.id));
       showCustomAlert('Ujian berhasil dihapus!', 'success');
       setUjianToDelete(null);
@@ -216,141 +241,110 @@ export default function UjianPage() {
               <p className="text-sm text-gray-400 mt-2">Klik "Tambah Ujian Baru" untuk menambahkan.</p>
             </div>
           ) : (
-            <ul className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-6">
               {ujians.map((ujian, index) => {
                 const statusInfo = getUjianStatusForGuruDisplay(ujian.date, ujian.time, ujian.durationMinutes);
                 return (
-                  <li 
+                  <div 
                     key={ujian.id} 
-                    className={`bg-white border border-gray-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow duration-200 ${hasMounted ? 'animate-fade-in-up' : 'opacity-0'}`}
+                    className={`bg-white border border-gray-200 rounded-xl flex flex-col shadow-sm hover:shadow-lg transition-all duration-300 ${hasMounted ? 'animate-fade-in-up' : 'opacity-0'}`}
                     style={{ animationDelay: hasMounted ? `${(index * 0.05) + 0.2}s` : '0s' }}
                   >
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between">
-                      <div className="flex items-center space-x-3 sm:space-x-4 mb-3 sm:mb-0 flex-grow min-w-0">
-                        <div className={`p-2.5 rounded-full`}>
-                            {statusInfo.icon || <BookText size={22} />}
-                        </div>
-                        <div className="flex-grow min-w-0">
-                          <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-x-2">
-                            <p className="font-semibold text-md sm:text-lg text-gray-800 leading-tight truncate" title={ujian.name}>
-                              {ujian.name}
-                            </p>
-                            <span className={`mt-1 sm:mt-0 px-2.5 py-0.5 inline-block text-xs leading-5 font-semibold rounded-full whitespace-nowrap ${statusInfo.colorClass}`}>
-                                {statusInfo.text}
-                            </span>
+                    <div className="relative">
+                       <img 
+                        src={ujian.coverImageUrl || `https://placehold.co/600x400/f97316/ffffff?text=Ujian`} 
+                        alt={`Sampul untuk ${ujian.name}`}
+                        className="w-full h-32 object-cover rounded-t-xl"
+                        onError={(e) => { e.target.onerror = null; e.target.src=`https://placehold.co/600x400/f97316/ffffff?text=Ujian`}}
+                      />
+                       <span className={`absolute top-2 right-2 px-2 py-1 text-xs font-semibold rounded-full ${statusInfo.colorClass}`}>
+                          {statusInfo.text}
+                       </span>
+                    </div>
+
+                    <div className="p-4 flex flex-col flex-grow">
+                      <h3 className="font-semibold text-gray-800 flex-grow leading-tight" title={ujian.name}>{ujian.name}</h3>
+                      <div className="text-gray-500 text-xs mt-2 space-y-1">
+                          <div className="flex items-center">
+                            <CalendarDays size={14} className="mr-1.5 text-gray-400" />
+                            <span>{new Date(ujian.date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
                           </div>
-                          <div className="flex flex-col sm:flex-row sm:items-center text-gray-500 text-xs mt-1.5 gap-x-3 gap-y-0.5">
-                            <div className="flex items-center">
-                                <CalendarDays size={14} className="mr-1.5 text-gray-400" />
-                                <span>{new Date(ujian.date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
-                            </div>
-                            <div className="flex items-center">
-                                <Clock size={14} className="mr-1.5 text-gray-400" />
-                                <span>{ujian.time} WIB ({ujian.durationMinutes} mnt)</span>
-                            </div>
+                          <div className="flex items-center">
+                            <Clock size={14} className="mr-1.5 text-gray-400" />
+                            <span>{ujian.time} WIB ({ujian.durationMinutes} mnt)</span>
                           </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-2 flex-shrink-0 w-full sm:w-auto justify-end mt-3 sm:mt-0">
-                        <a href={ujian.fileSoalUrl} target="_blank" rel="noreferrer" className="flex items-center text-xs font-medium text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-md transition duration-150">
-                          <FileText size={14} className="mr-1" /> Lihat Soal
-                        </a>
-                        {ujian.fileVideoUrl && (
-                          <a href={ujian.fileVideoUrl} target="_blank" rel="noreferrer" className="flex items-center text-xs font-medium text-purple-600 hover:text-purple-700 bg-purple-50 hover:bg-purple-100 px-3 py-1.5 rounded-md transition duration-150">
-                            <Video size={14} className="mr-1" /> Lihat Video
-                          </a>
-                        )}
-                        <button onClick={() => handleOpenEditModal(ujian)} className="text-blue-600 hover:text-blue-800 p-1.5 rounded-md hover:bg-blue-100 transition-colors" aria-label={`Edit ujian ${ujian.name}`}>
-                          <Edit size={16} />
-                        </button>
-                        <button onClick={() => confirmDeleteUjian(ujian)} className="text-red-500 hover:text-red-700 p-1.5 rounded-md hover:bg-red-100 transition-colors" aria-label={`Hapus ujian ${ujian.name}`}>
-                          <Trash2 size={16} />
-                        </button>
                       </div>
                     </div>
-                  </li>
+
+                    <div className="flex items-center justify-between space-x-1 p-2 border-t border-gray-100">
+                        <button onClick={() => {
+                          router.push(`/guru/soal?ujianId=` + ujian.id)
+                          localStorage.setItem('idUjian',ujian.id)
+                          }} className="flex-1 text-center text-xs font-medium text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-2 py-1.5 rounded-md transition duration-150">
+                           Input Soal
+                        </button>
+                        <div className='flex'>
+                            <button onClick={() => handleOpenEditModal(ujian)} className="text-blue-600 hover:text-blue-800 p-1.5 rounded-md hover:bg-blue-100 transition-colors" aria-label={`Edit ujian ${ujian.name}`}>
+                            <Edit size={16} />
+                            </button>
+                            <button onClick={() => confirmDeleteUjian(ujian)} className="text-red-500 hover:text-red-700 p-1.5 rounded-md hover:bg-red-100 transition-colors" aria-label={`Hapus ujian ${ujian.name}`}>
+                            <Trash2 size={16} />
+                            </button>
+                        </div>
+                    </div>
+                  </div>
                 );
               })}
-            </ul>
+            </div>
           )}
         </div>
 
+        {/* Modal Tambah Ujian */}
         {showAddModal && (
-           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto ">
-             <div className="bg-white rounded-xl shadow-xl p-7 w-full max-w-lg relative animate-fade-in-up my-8">
-               <button onClick={() => setShowAddModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 transition duration-150"><X size={24}/></button>
-               <h2 className="text-xl font-semibold mb-6 text-center text-gray-800">Upload Ujian Baru</h2>
-               <form onSubmit={handleAddUjian} className="space-y-4">
-                 <div>
-                   <label htmlFor="ujianName" className="block text-sm font-medium text-gray-700 mb-1">Nama Ujian</label>
-                   <input type="text" id="ujianName" value={ujianName} onChange={(e) => setUjianName(e.target.value)} placeholder="Contoh: Ujian Tengah Semester Matematika" className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} required />
-                 </div>
-                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                     <div>
-                         <label htmlFor="tanggalUjian" className="block text-sm font-medium text-gray-700 mb-1">Tanggal Ujian</label>
-                         <input type="date" id="tanggalUjian" value={tanggalUjian} onChange={(e) => setTanggalUjian(e.target.value)} className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} required />
-                     </div>
-                     <div>
-                         <label htmlFor="waktuUjian" className="block text-sm font-medium text-gray-700 mb-1">Waktu Mulai</label>
-                         <input type="time" id="waktuUjian" value={waktuUjian} onChange={(e) => setWaktuUjian(e.target.value)} className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} required />
-                     </div>
-                 </div>
-                 <div>
-                     <label htmlFor="durasiUjian" className="block text-sm font-medium text-gray-700 mb-1">Durasi Ujian (menit)</label>
-                     <input type="number" id="durasiUjian" value={durasiUjian} onChange={(e) => setDurasiUjian(parseInt(e.target.value, 10) || 0)} min="1" placeholder="Contoh: 90" className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} required />
-                 </div>
-                 <div>
-                   <label htmlFor="fileSoalUrl" className="block text-sm font-medium text-gray-700 mb-1">URL File Soal Ujian (PDF/DOC)</label>
-                   <input type="url" id="fileSoalUrl" value={fileSoalUrl} onChange={(e) => setFileSoalUrl(e.target.value)} placeholder="Contoh: https://example.com/soal-ujian.pdf" className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} required />
-                   <p className="text-xs text-gray-500 mt-1">Masukkan URL publik ke file soal.</p>
-                 </div>
-                 <div>
-                   <label htmlFor="fileVideoUrl" className="block text-sm font-medium text-gray-700 mb-1">URL Video Penjelasan (opsional)</label>
-                   <input type="url" id="fileVideoUrl" value={fileVideoUrl} onChange={(e) => setFileVideoUrl(e.target.value)} placeholder="Contoh: https://youtube.com/embed/..." className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} />
-                   <p className="text-xs text-gray-500 mt-1">Masukkan URL embed video jika ada.</p>
-                 </div>
-                 <div className="flex justify-end space-x-3 pt-2">
-                   <button type="button" onClick={() => setShowAddModal(false)} className="px-5 py-2.5 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300">Batal</button>
-                   <button type="submit" disabled={isSubmitting} className={`px-5 py-2.5 ${primaryButtonColor} ${primaryButtonTextColor} rounded-lg shadow-md disabled:opacity-50`}>
-                     {isSubmitting ? 'Menyimpan...' : 'Upload Ujian'}
-                   </button>
-                 </div>
-               </form>
-             </div>
-           </div>
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto ">
+              <div className="bg-white rounded-xl shadow-xl p-7 w-full max-w-lg relative animate-fade-in-up my-8">
+                <button onClick={() => setShowAddModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 transition duration-150"><X size={24}/></button>
+                <h2 className="text-xl font-semibold mb-6 text-center text-gray-800">Buat Jadwal Ujian</h2>
+                <form onSubmit={handleAddUjian} className="space-y-4">
+                  <input type="text" value={ujianName} onChange={(e) => setUjianName(e.target.value)} placeholder="Nama Ujian" className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} required />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <input type="date" value={tanggalUjian} onChange={(e) => setTanggalUjian(e.target.value)} className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} required />
+                      <input type="time" value={waktuUjian} onChange={(e) => setWaktuUjian(e.target.value)} className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} required />
+                  </div>
+                  <input type="number" value={durasiUjian} onChange={(e) => setDurasiUjian(parseInt(e.target.value, 10) || 0)} min="1" placeholder="Durasi (menit)" className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} required />
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Gambar Sampul (Opsional)</label>
+                    <input type="file" ref={addCoverImageInputRef} onChange={(e) => setCoverImage(e.target.files[0])} className={`w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100 ${inputFocusColor} border border-gray-300 rounded-lg cursor-pointer`} accept="image/*" />
+                  </div>
+                  <div className="flex justify-end space-x-3 pt-2">
+                    <button type="button" onClick={() => setShowAddModal(false)} className="px-5 py-2.5 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300">Batal</button>
+                    {/* --- DIUBAH: Teks tombol disesuaikan --- */}
+                    <button type="submit" disabled={isSubmitting} className={`px-5 py-2.5 ${primaryButtonColor} ${primaryButtonTextColor} rounded-lg shadow-md disabled:opacity-50`}>
+                      {isSubmitting ? 'Menyimpan...' : 'Simpan Jadwal'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
         )}
 
+        {/* Modal Edit Ujian */}
         {showEditModal && editingUjian && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto">
             <div className="bg-white rounded-xl shadow-xl p-7 w-full max-w-lg relative animate-fade-in-up my-8">
               <button onClick={handleCancelEdit} className="absolute top-4 right-4 text-gray-400 hover:text-gray-700"><X size={24} /></button>
               <h2 className="text-xl font-semibold mb-6 text-center text-gray-800">Edit Ujian</h2>
               <form onSubmit={handleSaveEditUjian} className="space-y-4">
-                <div>
-                  <label htmlFor="editedUjianName" className="block text-sm font-medium text-gray-700 mb-1">Nama Ujian</label>
-                  <input type="text" id="editedUjianName" value={editingUjian.name} onChange={(e) => setEditingUjian({...editingUjian, name: e.target.value})} className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} required />
-                </div>
+                <input type="text" value={editingUjian.name} onChange={(e) => setEditingUjian({...editingUjian, name: e.target.value})} className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} required />
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                        <label htmlFor="editedTanggalUjian" className="block text-sm font-medium text-gray-700 mb-1">Tanggal Ujian</label>
-                        <input type="date" id="editedTanggalUjian" value={editingUjian.date} onChange={(e) => setEditingUjian({...editingUjian, date: e.target.value})} className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} required />
-                    </div>
-                    <div>
-                        <label htmlFor="editedWaktuUjian" className="block text-sm font-medium text-gray-700 mb-1">Waktu Mulai</label>
-                        <input type="time" id="editedWaktuUjian" value={editingUjian.time} onChange={(e) => setEditingUjian({...editingUjian, time: e.target.value})} className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} required />
-                    </div>
+                    <input type="date" value={editingUjian.date} onChange={(e) => setEditingUjian({...editingUjian, date: e.target.value})} className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} required />
+                    <input type="time" value={editingUjian.time} onChange={(e) => setEditingUjian({...editingUjian, time: e.target.value})} className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} required />
                 </div>
+                <input type="number" value={editingUjian.durationMinutes} onChange={(e) => setEditingUjian({...editingUjian, durationMinutes: parseInt(e.target.value, 10) || 0})} min="1" className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} required />
                 <div>
-                    <label htmlFor="editedDurasiUjian" className="block text-sm font-medium text-gray-700 mb-1">Durasi Ujian (menit)</label>
-                    <input type="number" id="editedDurasiUjian" value={editingUjian.durationMinutes} onChange={(e) => setEditingUjian({...editingUjian, durationMinutes: parseInt(e.target.value, 10) || 0})} min="1" className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} required />
-                </div>
-                <div>
-                  <label htmlFor="editedFileSoalUrl" className="block text-sm font-medium text-gray-700 mb-1">URL File Soal Ujian</label>
-                  <input type="url" id="editedFileSoalUrl" value={editingUjian.fileSoalUrl} onChange={(e) => setEditingUjian({...editingUjian, fileSoalUrl: e.target.value})} className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} required />
-                </div>
-                <div>
-                  <label htmlFor="editedFileVideoUrl" className="block text-sm font-medium text-gray-700 mb-1">URL Video Penjelasan (opsional)</label>
-                  <input type="url" id="editedFileVideoUrl" value={editingUjian.fileVideoUrl || ''} onChange={(e) => setEditingUjian({...editingUjian, fileVideoUrl: e.target.value})} className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} />
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Ganti Gambar Sampul (Opsional)</label>
+                  <input type="file" ref={editCoverImageInputRef} onChange={(e) => setEditedCoverImage(e.target.files[0])} className={`w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100 ${inputFocusColor} border border-gray-300 rounded-lg cursor-pointer`} accept="image/*" />
+                  {editingUjian.coverImageUrl && <p className="text-xs text-gray-500 mt-1">Kosongkan jika tidak ingin mengubah gambar.</p>}
                 </div>
                 <div className="flex justify-end space-x-3 pt-2">
                   <button type="button" onClick={handleCancelEdit} className="px-5 py-2.5 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300">Batal</button>
@@ -361,6 +355,7 @@ export default function UjianPage() {
           </div>
         )}
         
+        {/* Modal Hapus & Alert */}
         {showDeleteConfirmModal && ujianToDelete && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
             <div className="bg-white rounded-xl shadow-xl p-7 w-full max-w-sm text-center animate-fade-in-up">
@@ -369,16 +364,15 @@ export default function UjianPage() {
               <div className="flex justify-center space-x-3">
                 <button type="button" className="px-5 py-2.5 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300" onClick={() => setShowDeleteConfirmModal(false)}>Batal</button>
                 <button type="button" disabled={isSubmitting} className="px-5 py-2.5 bg-red-600 text-white rounded-lg shadow-md hover:bg-red-700 disabled:opacity-50 flex items-center" onClick={handleDeleteUjian}>
-                    {isSubmitting ? 'Menghapus...' : 'Ya, Hapus'}
+                  {isSubmitting ? 'Menghapus...' : 'Ya, Hapus'}
                 </button>
               </div>
             </div>
           </div>
         )}
-
         {showAlertModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-             <div className={`bg-white rounded-xl shadow-xl p-7 w-full max-w-sm text-center animate-fade-in-up border-t-4 ${alertType === 'success' ? 'border-green-500' : 'border-red-500'}`}>
+            <div className={`bg-white rounded-xl shadow-xl p-7 w-full max-w-sm text-center animate-fade-in-up border-t-4 ${alertType === 'success' ? 'border-green-500' : 'border-red-500'}`}>
               <h3 className={`text-xl font-semibold mb-3 ${alertType === 'success' ? 'text-green-700' : 'text-red-700'}`}>{alertType === 'success' ? 'Berhasil!' : 'Terjadi Kesalahan!'}</h3>
               <p className="text-gray-600 mb-6 text-sm">{alertMessage}</p>
               <button type="button" className={`px-6 py-2.5 rounded-lg shadow-md ${alertType === 'success' ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-red-600 hover:bg-red-700 text-white'}`} onClick={() => setShowAlertModal(false)}>Oke</button>

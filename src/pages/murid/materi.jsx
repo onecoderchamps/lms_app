@@ -111,7 +111,7 @@ export default function MateriMuridPage() {
               <p className="text-sm text-gray-400 mt-2">Periksa kembali nanti atau hubungi guru Anda.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
               
               {materis.map((materi, index) => (
                 <a
