@@ -1,15 +1,15 @@
-import { useState, useEffect } from 'react';
-import MainLayout from './layouts/MainLayout'; // Pastikan path ini benar
+import React, { useState, useEffect } from 'react';
+import MainLayout from './layouts/MainLayout';
+import Link from 'next/link';
 import { db, auth } from "../../api/firebaseConfig"; // Pastikan path ini benar
 import { collection, getDocs, query, where, onSnapshot, orderBy, documentId } from 'firebase/firestore';
-import { CalendarDays, Clock, Link as LinkIcon, Video } from 'lucide-react';
+import { CalendarDays, Clock, Link as LinkIcon, Video, CheckSquare, Hourglass } from 'lucide-react';
 
 export default function MuridLiveSessionPage() {
   const [liveSessions, setLiveSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [userClasses, setUserClasses] = useState(null);
   const [classNames, setClassNames] = useState({});
-
   const [currentTime, setCurrentTime] = useState(new Date());
   const [hasMounted, setHasMounted] = useState(false);
 
@@ -28,10 +28,10 @@ export default function MuridLiveSessionPage() {
 
   const fetchUserClasses = async (uid) => {
     try {
-      const enrollQuery = query(collection(db, "enrollments"), where("muridId", "==", uid));
-      const enrollSnapshot = await getDocs(enrollQuery);
-      const classIds = enrollSnapshot.docs.map(doc => doc.data().kelasId);
-      
+      const enrollmentsQuery = query(collection(db, "enrollments"), where("muridId", "==", uid));
+      const enrollmentsSnapshot = await getDocs(enrollmentsQuery);
+      const classIds = enrollmentsSnapshot.docs.map(doc => doc.data().kelasId);
+
       if (classIds.length > 0) {
         const kelasQuery = query(collection(db, "kelas"), where(documentId(), "in", classIds));
         const kelasSnapshot = await getDocs(kelasQuery);
@@ -85,7 +85,8 @@ export default function MuridLiveSessionPage() {
     const timer = setInterval(() => setCurrentTime(new Date()), 60000);
     return () => clearInterval(timer);
   }, []);
-
+  
+  // --- DIUBAH: Logika status disempurnakan dengan warna dan ikon yang tepat ---
   const getSessionStatus = (sessionDate, sessionTime) => {
     const sessionDateTime = new Date(`${sessionDate}T${sessionTime}:00`);
     const now = currentTime;
@@ -93,11 +94,13 @@ export default function MuridLiveSessionPage() {
     const diffMinutes = Math.round(diffMs / (1000 * 60));
 
     if (diffMinutes > 15) {
-      return { status: 'Mendatang', color: 'from-indigo-400 to-indigo-600', text: 'Akan Datang' };
+      return { text: 'Akan Datang', colorClass: 'bg-indigo-100 text-indigo-800', isJoinable: false, icon: <CalendarDays size={14} /> };
+    } else if (diffMinutes > 0) {
+      return { text: `Mulai dalam ${diffMinutes} mnt`, colorClass: 'bg-yellow-100 text-yellow-800 animate-pulse', isJoinable: false, icon: <Hourglass size={14} /> };
     } else if (diffMinutes > -60) {
-      return { status: 'Berlangsung', color: 'from-green-400 to-green-600', text: 'Sedang Berlangsung' };
+      return { text: 'Berlangsung', colorClass: 'bg-green-100 text-green-800 animate-pulse', isJoinable: true, icon: <Video size={14} /> };
     } else {
-      return { status: 'Selesai', color: 'from-gray-400 to-gray-600', text: 'Sudah Selesai' };
+      return { text: 'Selesai', colorClass: 'bg-gray-100 text-gray-800', isJoinable: false, icon: <CheckSquare size={14} /> };
     }
   };
   
@@ -110,10 +113,8 @@ export default function MuridLiveSessionPage() {
         <div className="max-w-full mx-auto bg-white rounded-xl shadow-xl p-6 md:p-8">
           <div className={`mb-8 ${hasMounted ? 'animate-fade-in-up' : 'opacity-0'}`} style={{ animationDelay: '0.1s' }}>
             <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Sesi Live Saya</h1>
-            
-            {/* SUB-JUDUL PINTAR DITAMPILKAN DI SINI */}
             {Object.keys(classNames).length > 0 && (
-                <p className="text-md text-orange-600 font-semibold mt-1">
+                <p className="mt-1 text-orange-600 font-semibold">
                     {Object.keys(classNames).length === 1
                         ? `Kelas: ${Object.values(classNames)[0]}`
                         : 'Untuk Semua Kelas Anda'
@@ -132,20 +133,30 @@ export default function MuridLiveSessionPage() {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
               {liveSessions.map((session, index) => {
-                const { color: statusColor, text: statusText, status: sessionStatus } = getSessionStatus(session.date, session.time);
+                const { colorClass, text: statusText, isJoinable, icon: statusIcon } = getSessionStatus(session.date, session.time);
                 
                 return (
                   <div key={session.id} 
                        className={`bg-white rounded-xl shadow-lg overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-1.5 flex flex-col ${hasMounted ? 'animate-fade-in-up' : 'opacity-0'}`}
                        style={{ animationDelay: hasMounted ? `${(index * 0.05) + 0.2}s` : '0s' }}>
-                    <div className={`relative h-36 flex flex-col items-center justify-center p-4 text-white bg-gradient-to-br ${statusColor}`}>
-                      <Video size={40} strokeWidth={1.5} />
-                      <span className="absolute top-2 right-2 px-2.5 py-1 text-xs font-medium rounded-full bg-black bg-opacity-25">{statusText}</span>
+                    
+                    <div className="relative">
+                        <img 
+                            src={session.imageUrl || `/live.svg`}
+                            alt={`Banner untuk ${session.name}`}
+                            className="w-full h-36 object-cover"
+                            onError={(e) => { e.target.onerror = null; e.target.src=`https://placehold.co/600x400/f97316/ffffff?text=Live`}}
+                        />
+                        {/* --- DIUBAH: Tampilan Badge Status diperbaiki --- */}
+                        <span className={`absolute top-2 right-2 px-2.5 py-1 text-xs font-semibold rounded-full flex items-center gap-1.5 ${colorClass}`}>
+                            {statusIcon}
+                            {statusText}
+                        </span>
                     </div>
+
                     <div className="p-5 flex flex-col flex-grow">
-                      <p className="font-semibold text-md text-gray-800 mb-1 leading-tight flex-grow min-h-[40px]">{session.name}</p>
-                      
-                      {/* NAMA KELAS SUDAH DIHAPUS DARI KARTU INI */}
+                      <p className="font-semibold text-md text-gray-800 mb-2 leading-tight flex-grow min-h-[40px]">{session.name}</p>
+                      <p className="text-xs text-gray-500 mb-3">Kelas: {classNames[session.kelas]}</p>
                       
                       <div className="flex items-center text-gray-600 text-xs mb-1">
                         <CalendarDays size={14} className="mr-2 text-gray-400" />
@@ -159,9 +170,9 @@ export default function MuridLiveSessionPage() {
                         <a
                           href={session.link} target="_blank" rel="noreferrer"
                           className={`flex items-center justify-center px-4 py-2.5 rounded-lg shadow-md transition duration-300 text-sm font-medium w-full ${
-                            sessionStatus === 'Selesai' ? 'bg-gray-300 text-gray-600 cursor-not-allowed' : `${primaryButtonColor} ${primaryButtonTextColor}`
+                            !isJoinable ? 'bg-gray-300 text-gray-600 cursor-not-allowed' : `${primaryButtonColor} ${primaryButtonTextColor}`
                           }`}
-                          onClick={(e) => sessionStatus === 'Selesai' && e.preventDefault()}
+                          onClick={(e) => !isJoinable && e.preventDefault()}
                         >
                           <LinkIcon size={16} className="mr-2" /> Gabung Sesi
                         </a>
@@ -172,7 +183,7 @@ export default function MuridLiveSessionPage() {
               })}
             </div>
           )}
-        </div>
+        </div> 
         <style jsx>{`
           @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
           .animate-fade-in-up { animation: fadeInUp 0.4s ease-out forwards; opacity: 0; }

@@ -16,6 +16,8 @@ import {
   serverTimestamp,
   getDoc,
 } from "firebase/firestore";
+// --- BARU: Menambahkan impor untuk Storage ---
+import { getStorage, ref, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage";
 import {
   PlusCircle,
   Trash2,
@@ -26,14 +28,14 @@ import {
   X,
 } from "lucide-react";
 
+const storage = getStorage(app); // Inisialisasi Storage
+
 export default function InputSoalUjianPage() {
   const router = useRouter();
-  const { ujianId } = router.query; // Mengambil ID ujian dari URL
+  const { ujianId } = router.query;
 
   const [ujianInfo, setUjianInfo] = useState(null);
   const [soalList, setSoalList] = useState([]);
-
-  // State untuk loading
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -50,7 +52,12 @@ export default function InputSoalUjianPage() {
     pilihan: ["", "", "", ""],
     jawaban: "",
   });
+  const [soalImage, setSoalImage] = useState(null); // BARU: State untuk file gambar
+  const addSoalImageRef = useRef(null); // BARU
+
   const [editingSoal, setEditingSoal] = useState(null);
+  const [editedSoalImage, setEditedSoalImage] = useState(null); // BARU
+  const editSoalImageRef = useRef(null); // BARU
 
   // State untuk notifikasi
   const [showAlertModal, setShowAlertModal] = useState(false);
@@ -62,14 +69,12 @@ export default function InputSoalUjianPage() {
     setHasMounted(true);
   }, []);
 
-  // --- DIUBAH: Fetch informasi ujian dan daftar soalnya berdasarkan ujianId dari URL ---
   useEffect(() => {
     if (!ujianId) {
       setLoading(false);
       return;
     }
 
-    // 1. Fetch data ujian yang sedang dikelola
     const ujianDocRef = doc(db, "ujian", ujianId);
     const unsubscribeUjian = onSnapshot(ujianDocRef, (docSnap) => {
         if (docSnap.exists()) {
@@ -80,7 +85,6 @@ export default function InputSoalUjianPage() {
         }
     });
 
-    // 2. Fetch soal-soal untuk ujian ini
     setLoading(true);
     const q = query(
       collection(db, "soalUjian"),
@@ -90,10 +94,7 @@ export default function InputSoalUjianPage() {
     const unsubscribeSoal = onSnapshot(
       q,
       (snapshot) => {
-        const data = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
+        const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
         setSoalList(data);
         setLoading(false);
       },
@@ -117,12 +118,19 @@ export default function InputSoalUjianPage() {
   };
 
   const resetForm = () => {
-    setFormState({
-      soal: "",
-      tipeSoal: "Pilihan Ganda",
-      pilihan: ["", "", "", ""],
-      jawaban: "",
-    });
+    setFormState({ soal: "", tipeSoal: "Pilihan Ganda", pilihan: ["", "", "", ""], jawaban: "" });
+    setSoalImage(null);
+    if (addSoalImageRef.current) addSoalImageRef.current.value = "";
+  };
+
+  // --- BARU: Fungsi helper upload file ---
+  const uploadFile = async (file, path) => {
+    if (!file) return null;
+    const filePath = `${path}/${Date.now()}_${file.name}`;
+    const fileRef = ref(storage, filePath);
+    await uploadBytesResumable(fileRef, file);
+    const downloadURL = await getDownloadURL(fileRef);
+    return { url: downloadURL, path: filePath };
   };
 
   const handleFormChange = (e) => {
@@ -153,6 +161,7 @@ export default function InputSoalUjianPage() {
     }
   };
 
+  // --- DIUBAH: Logika tambah soal dengan gambar ---
   const handleAddSoal = async (e) => {
     e.preventDefault();
     if (!formState.soal.trim()) return showCustomAlert("Teks soal tidak boleh kosong.", "error");
@@ -163,12 +172,16 @@ export default function InputSoalUjianPage() {
 
     setIsSubmitting(true);
     try {
+      const imageUpload = await uploadFile(soalImage, `soalImages/${ujianId}`);
+
       await addDoc(collection(db, "soalUjian"), {
-        idUjian: ujianId, // Menggunakan ujianId dari URL
+        idUjian: ujianId,
         soal: formState.soal,
         tipeSoal: formState.tipeSoal,
         pilihan: formState.tipeSoal === "Pilihan Ganda" ? formState.pilihan.filter((p) => p.trim() !== "") : [],
         jawaban: formState.tipeSoal === "Pilihan Ganda" ? formState.jawaban : "",
+        imageUrl: imageUpload?.url || null,
+        imagePath: imageUpload?.path || null,
         createdAt: serverTimestamp(),
       });
       resetForm();
@@ -189,9 +202,12 @@ export default function InputSoalUjianPage() {
       pilihan: soalItem.pilihan || ["", "", "", ""],
       jawaban: soalItem.jawaban,
     });
+    setEditedSoalImage(null);
+    if(editSoalImageRef.current) editSoalImageRef.current.value = "";
     setShowEditModal(true);
   };
 
+  // --- DIUBAH: Logika update soal dengan gambar ---
   const handleUpdateSoal = async (e) => {
     e.preventDefault();
     if (!editingSoal) return;
@@ -204,12 +220,23 @@ export default function InputSoalUjianPage() {
     setIsSubmitting(true);
     const soalDocRef = doc(db, "soalUjian", editingSoal.id);
     try {
-      await updateDoc(soalDocRef, {
+      const dataToUpdate = {
         soal: formState.soal,
         tipeSoal: formState.tipeSoal,
         pilihan: formState.tipeSoal === "Pilihan Ganda" ? formState.pilihan.filter((p) => p.trim() !== "") : [],
         jawaban: formState.tipeSoal === "Pilihan Ganda" ? formState.jawaban : "",
-      });
+      };
+
+      if (editedSoalImage) {
+        if (editingSoal.imagePath) {
+          await deleteObject(ref(storage, editingSoal.imagePath)).catch(console.error);
+        }
+        const upload = await uploadFile(editedSoalImage, `soalImages/${ujianId}`);
+        dataToUpdate.imageUrl = upload.url;
+        dataToUpdate.imagePath = upload.path;
+      }
+
+      await updateDoc(soalDocRef, dataToUpdate);
       setShowEditModal(false);
       setEditingSoal(null);
       showCustomAlert("Soal berhasil diperbarui!", "success");
@@ -225,10 +252,14 @@ export default function InputSoalUjianPage() {
     setShowDeleteModal(true);
   };
 
+  // --- DIUBAH: Logika hapus soal dengan gambar ---
   const handleDeleteSoal = async () => {
     if (!soalToDelete) return;
     setIsSubmitting(true);
     try {
+      if (soalToDelete.imagePath) {
+        await deleteObject(ref(storage, soalToDelete.imagePath)).catch(console.error);
+      }
       await deleteDoc(doc(db, "soalUjian", soalToDelete.id));
       showCustomAlert("Soal berhasil dihapus!", "success");
       setShowDeleteModal(false);
@@ -251,14 +282,14 @@ export default function InputSoalUjianPage() {
           <div className={`mb-8 ${hasMounted ? "animate-fade-in-up" : "opacity-0"}`}>
             <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Bank Soal Ujian</h1>
             <p className="text-md text-orange-600 font-semibold mt-1">
-              {ujianInfo ? `Untuk Ujian: ${ujianInfo.name}` : "Memuat nama ujian..."}
+              {ujianInfo ? `Untuk Ujian: ${ujianInfo.name}` : (loading ? "Memuat..." : "Ujian tidak ditemukan")}
             </p>
           </div>
 
           <div className="flex justify-start mb-8">
             <button
               onClick={() => { resetForm(); setShowAddModal(true); }}
-              disabled={!ujianId}
+              disabled={!ujianId || loading}
               className="flex items-center space-x-2 bg-orange-500 text-white px-5 py-2.5 rounded-lg shadow-md hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition duration-300 text-sm font-medium disabled:bg-gray-300 disabled:cursor-not-allowed"
             >
               <PlusCircle size={20} />
@@ -266,7 +297,6 @@ export default function InputSoalUjianPage() {
             </button>
           </div>
 
-          {/* --- DIUBAH: Logika tampilan disederhanakan --- */}
           {loading ? (
             <p className="text-center text-gray-500 py-16 animate-pulse">Memuat soal...</p>
           ) : !ujianId ? (
@@ -288,6 +318,10 @@ export default function InputSoalUjianPage() {
                     <div className="flex-1">
                       <p className="text-sm text-gray-500 font-medium">Soal #{index + 1} - <span className="font-bold text-gray-600">{soal.tipeSoal}</span></p>
                       <p className="mt-1 text-gray-800 whitespace-pre-wrap">{soal.soal}</p>
+                      {/* --- BARU: Menampilkan gambar jika ada --- */}
+                      {soal.imageUrl && (
+                        <img src={soal.imageUrl} alt="Ilustrasi Soal" className="mt-4 rounded-lg max-w-sm" />
+                      )}
                       {soal.tipeSoal === "Pilihan Ganda" && (
                         <div className="mt-4 space-y-2 text-sm">
                           {soal.pilihan.map((p, i) => (
@@ -322,6 +356,12 @@ export default function InputSoalUjianPage() {
                   <option>Pilihan Ganda</option>
                   <option>Esai</option>
                 </select>
+                {/* --- BARU: Input gambar di modal --- */}
+                <div>
+                   <label className="block text-sm font-medium text-gray-700 mb-1">Gambar Soal (Opsional)</label>
+                   <input type="file" ref={showAddModal ? addSoalImageRef : editSoalImageRef} onChange={(e) => showAddModal ? setSoalImage(e.target.files[0]) : setEditedSoalImage(e.target.files[0])} className={`w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100 ${inputFocusColor} border border-gray-300 rounded-lg cursor-pointer`} accept="image/*" />
+                   {showEditModal && editingSoal?.imageUrl && <p className="text-xs text-gray-500 mt-1">Kosongkan jika tidak ingin mengubah gambar.</p>}
+                </div>
                 {formState.tipeSoal === "Pilihan Ganda" && (
                   <div className="p-4 border rounded-lg bg-gray-50 space-y-3">
                     <p className="text-sm font-medium text-gray-600">Opsi Jawaban & Kunci</p>
@@ -346,7 +386,7 @@ export default function InputSoalUjianPage() {
           </div>
         )}
 
-        {/* Modal Konfirmasi Hapus */}
+        {/* Modal-modal lainnya */}
         {showDeleteModal && soalToDelete && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
             <div className="bg-white rounded-xl shadow-xl p-7 w-full max-w-sm text-center animate-fade-in-up">
@@ -362,8 +402,6 @@ export default function InputSoalUjianPage() {
             </div>
           </div>
         )}
-
-        {/* Modal Alert Umum */}
         {showAlertModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
             <div className={`bg-white rounded-xl shadow-xl p-7 w-full max-w-sm text-center animate-fade-in-up border-t-4 ${alertType === "success" ? "border-green-500" : "border-red-500"}`}>
@@ -377,7 +415,7 @@ export default function InputSoalUjianPage() {
             </div>
           </div>
         )}
-
+        
         <style jsx>{`
           @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
           .animate-fade-in-up { animation: fadeInUp 0.4s ease-out forwards; opacity: 0; }

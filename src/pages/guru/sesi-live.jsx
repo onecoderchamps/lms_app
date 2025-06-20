@@ -16,18 +16,10 @@ import {
   orderBy,
   serverTimestamp,
 } from 'firebase/firestore';
-// --- BARU: Menambahkan impor untuk Firebase Storage ---
-import { 
-  getStorage, 
-  ref, 
-  uploadBytesResumable, 
-  getDownloadURL,
-  deleteObject
-} from 'firebase/storage';
+// Impor untuk Firebase Storage dihapus karena tidak lagi digunakan
 
 const db = getFirestore(app);
-// --- BARU: Inisialisasi Firebase Storage ---
-const storage = getStorage(app);
+// Inisialisasi Storage dihapus
 
 export default function SesiLivePage() {
   const router = useRouter();
@@ -41,27 +33,24 @@ export default function SesiLivePage() {
   const [sessionDate, setSessionDate] = useState('');
   const [sessionTime, setSessionTime] = useState('');
   const [sessionLink, setSessionLink] = useState('');
-  // --- BARU: State untuk gambar di form tambah ---
   const [sessionImage, setSessionImage] = useState(null);
   const addImageInputRef = useRef(null);
   
   // State untuk modal edit
   const [showEditSessionModal, setShowEditSessionModal] = useState(false);
   const [editingSession, setEditingSession] = useState(null);
-  // --- BARU: State untuk gambar di form edit ---
   const [editedSessionImage, setEditedSessionImage] = useState(null);
   const editImageInputRef = useRef(null);
 
-  // State umum untuk proses submit
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // State untuk modal hapus dan alert
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
   const [sessionToDelete, setSessionToDelete] = useState(null);
   const [showAlertModal, setShowAlertModal] = useState(false);
   const [alertMessage, setAlertMessage] = useState('');
   const [alertType, setAlertType] = useState('success');
   const [hasMounted, setHasMounted] = useState(false);
+  const [currentTime, setCurrentTime] = useState(new Date());
 
   useEffect(() => {
     const classId = localStorage.getItem('idKelas');
@@ -72,6 +61,11 @@ export default function SesiLivePage() {
       setLoading(false);
     }
     setHasMounted(true);
+  }, []);
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 60000);
+    return () => clearInterval(timer);
   }, []);
 
   useEffect(() => {
@@ -97,6 +91,21 @@ export default function SesiLivePage() {
     return () => unsubscribe();
   }, [activeClass.id]);
 
+  const getSessionStatusForGuruDisplay = (sessionDate, sessionTime) => {
+    const sessionDateTime = new Date(`${sessionDate}T${sessionTime}:00`);
+    const now = new Date();
+    const diffMs = sessionDateTime.getTime() - now.getTime();
+    const diffMinutes = Math.round(diffMs / (1000 * 60));
+
+    if (diffMinutes > 15) {
+        return { text: 'Akan Datang', colorClass: 'bg-indigo-100 text-indigo-700' };
+    } else if (diffMinutes > -60) {
+        return { text: 'Berlangsung', colorClass: 'bg-yellow-100 text-yellow-700 animate-pulse' };
+    } else {
+        return { text: 'Selesai', colorClass: 'bg-green-100 text-green-700' };
+    }
+  };
+
   const showCustomAlert = (message, type = "success") => {
     setAlertMessage(message);
     setAlertType(type);
@@ -105,12 +114,36 @@ export default function SesiLivePage() {
 
   const resetAddForm = () => {
     setSessionName(''); setSessionDate(''); setSessionTime(''); setSessionLink('');
-    // --- BARU: Reset state gambar ---
     setSessionImage(null);
     if(addImageInputRef.current) addImageInputRef.current.value = "";
   };
   
-  // --- DIUBAH: Logika handleAddSession diperbarui untuk mengunggah gambar ---
+  // --- DIUBAH: Fungsi upload diganti untuk menggunakan API eksternal ---
+  const uploadFileExternalApi = async (file) => {
+    if (!file) return null;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const response = await fetch('https://apiimpact.coderchamps.co.id/api/v1/file/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const result = await response.json();
+
+      if (result.status === true) {
+        return { url: result.path, fileId: result.fileId }; 
+      } else {
+        throw new Error(result.message || "Gagal mengunggah file ke API eksternal.");
+      }
+    } catch (error) {
+      console.error("Error uploading file to external API:", error);
+      throw error;
+    }
+  };
+  
   const handleAddSession = async (e) => {
     e.preventDefault();
     if (!sessionName.trim() || !sessionDate || !sessionTime || !sessionLink.trim()) {
@@ -118,17 +151,8 @@ export default function SesiLivePage() {
     }
     setIsSubmitting(true);
     try {
-      let imageUrl = null;
-      let imagePath = null;
-      if (sessionImage) {
-        const filePath = `sesiLiveBanners/${activeClass.id}/${Date.now()}_${sessionImage.name}`;
-        const storageRef = ref(storage, filePath);
-        const uploadTask = uploadBytesResumable(storageRef, sessionImage);
-        await uploadTask;
-        imageUrl = await getDownloadURL(storageRef);
-        imagePath = filePath;
-      }
-
+      const imageUpload = await uploadFileExternalApi(sessionImage);
+      
       await addDoc(collection(db, "sesiLive"), {
         name: sessionName,
         date: sessionDate,
@@ -136,9 +160,9 @@ export default function SesiLivePage() {
         link: sessionLink,
         kelas: activeClass.id,
         createdAt: serverTimestamp(),
-        // --- BARU: Menambahkan field gambar ke Firestore ---
-        imageUrl: imageUrl, 
-        imagePath: imagePath,
+        // --- DIUBAH: Menyimpan URL dari API eksternal ---
+        imageUrl: imageUpload?.url || null, 
+        // imagePath tidak lagi relevan jika API tidak punya fungsi delete by path
       });
       resetAddForm();
       setShowAddSessionModal(false);
@@ -152,13 +176,11 @@ export default function SesiLivePage() {
 
   const handleOpenEditModal = (session) => {
     setEditingSession({ ...session });
-    // --- BARU: Reset state gambar saat modal edit dibuka ---
     setEditedSessionImage(null);
     if(editImageInputRef.current) editImageInputRef.current.value = "";
     setShowEditSessionModal(true);
   };
   
-  // --- DIUBAH: Logika handleSaveEdit diperbarui untuk mengunggah/mengubah gambar ---
   const handleSaveEdit = async (e) => {
     e.preventDefault();
     if (!editingSession || !editingSession.name.trim() || !editingSession.date || !editingSession.time || !editingSession.link.trim()) {
@@ -168,26 +190,14 @@ export default function SesiLivePage() {
 
     const sessionDocRef = doc(db, "sesiLive", editingSession.id);
     try {
-        const dataToUpdate = {
-            name: editingSession.name,
-            date: editingSession.date,
-            time: editingSession.time,
-            link: editingSession.link,
-            updatedAt: serverTimestamp(),
-        };
+        const { id, createdAt, kelas, imagePath, ...dataToUpdate } = editingSession;
+        dataToUpdate.updatedAt = serverTimestamp();
 
         if (editedSessionImage) {
-            // Hapus gambar lama jika ada
-            if (editingSession.imagePath) {
-                const oldImageRef = ref(storage, editingSession.imagePath);
-                await deleteObject(oldImageRef).catch(err => console.error("Gagal hapus gambar lama:", err));
-            }
-            // Unggah gambar baru
-            const newImagePath = `sesiLiveBanners/${activeClass.id}/${Date.now()}_${editedSessionImage.name}`;
-            const newImageRef = ref(storage, newImagePath);
-            await uploadBytesResumable(newImageRef, editedSessionImage);
-            dataToUpdate.imageUrl = await getDownloadURL(newImageRef);
-            dataToUpdate.imagePath = newImagePath;
+            // NOTE: API Anda tidak menyediakan cara untuk menghapus file lama.
+            // File lama akan tetap ada di server apiimpact.coderchamps.co.id.
+            const upload = await uploadFileExternalApi(editedSessionImage);
+            dataToUpdate.imageUrl = upload.url;
         }
 
       await updateDoc(sessionDocRef, dataToUpdate);
@@ -207,17 +217,12 @@ export default function SesiLivePage() {
     setShowDeleteConfirmModal(true);
   };
 
-  // --- DIUBAH: Logika handleDeleteSession diperbarui untuk menghapus gambar dari storage ---
   const handleDeleteSession = async () => {
     if (!sessionToDelete) return;
     setIsSubmitting(true);
     try {
-      // Hapus gambar dari storage jika ada
-      if (sessionToDelete.imagePath) {
-        const imageRef = ref(storage, sessionToDelete.imagePath);
-        await deleteObject(imageRef).catch(err => console.error("Gagal hapus gambar:", err));
-      }
-      // Hapus dokumen dari firestore
+      // NOTE: API Anda tidak menyediakan cara untuk menghapus file lama.
+      // Kode ini hanya akan menghapus data dari Firestore. File gambar akan tetap ada di server API Anda.
       await deleteDoc(doc(db, "sesiLive", sessionToDelete.id));
       showCustomAlert('Sesi live berhasil dihapus!', 'success');
       setSessionToDelete(null);
@@ -259,50 +264,56 @@ export default function SesiLivePage() {
               <p className="text-sm text-gray-400 mt-2">Klik "Jadwalkan Sesi Baru" untuk menambahkan.</p>
             </div>
           ) : (
-            // --- DIUBAH: Tampilan diubah menjadi format kartu (card) ---
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
-              {liveSessions.map((session, index) => (
-                <div 
-                  key={session.id} 
-                  className={`bg-white border border-gray-200 rounded-xl flex flex-col shadow-sm hover:shadow-lg transition-shadow duration-300 ${hasMounted ? 'animate-fade-in-up' : 'opacity-0'}`}
-                  style={{ animationDelay: hasMounted ? `${(index * 0.05) + 0.2}s` : '0s' }}
-                >
-                  <a href={session.link} target="_blank" rel="noopener noreferrer" className="cursor-pointer group">
-                    <img 
-                      src={session.imageUrl || `https://placehold.co/600x400/f97316/ffffff?text=Live`} 
-                      alt={`Banner untuk ${session.name}`}
-                      className="w-full h-40 object-cover rounded-t-xl"
-                      onError={(e) => { e.target.onerror = null; e.target.src=`https://placehold.co/600x400/f97316/ffffff?text=Live`}}
-                    />
-                  </a>
-                  <div className="p-4 flex flex-col flex-grow">
-                     <h3 className="font-bold text-lg text-gray-800 flex-grow" title={session.name}>{session.name}</h3>
-                     <div className="flex items-center text-gray-600 text-sm mt-2 flex-wrap gap-x-4 gap-y-1">
-                        <div className="flex items-center">
-                          <CalendarDays size={16} className="mr-1.5 text-gray-400" />
-                          <span>{new Date(session.date).toLocaleDateString('id-ID', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
-                        </div>
-                        <div className="flex items-center">
-                          <Clock size={16} className="mr-1.5 text-gray-400" />
-                          <span>{session.time} WIB</span>
-                        </div>
-                      </div>
-                  </div>
-                   <div className="flex items-center justify-between p-4 border-t border-gray-100">
-                     <a href={session.link} target="_blank" rel="noreferrer" className="flex items-center text-sm font-medium text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-3.5 py-2 rounded-md transition duration-150">
-                        <LinkIcon size={16} className="mr-1.5" /> Buka Link
+              {liveSessions.map((session, index) => {
+                const statusInfo = getSessionStatusForGuruDisplay(session.date, session.time);
+                return (
+                  <div 
+                    key={session.id} 
+                    className={`bg-white border border-gray-200 rounded-xl flex flex-col shadow-sm hover:shadow-lg transition-shadow duration-300 ${hasMounted ? 'animate-fade-in-up' : 'opacity-0'}`}
+                    style={{ animationDelay: hasMounted ? `${(index * 0.05) + 0.2}s` : '0s' }}
+                  >
+                    <div className="relative">
+                      <a href={session.link} target="_blank" rel="noopener noreferrer" className="cursor-pointer group">
+                        <img 
+                          src={session.imageUrl || `/live.svg`} 
+                          alt={`Banner untuk ${session.name}`}
+                          className="w-full h-40 object-cover rounded-t-xl"
+                          onError={(e) => { e.target.onerror = null; e.target.src=`https://placehold.co/600x400/f97316/ffffff?text=Live`}}
+                        />
                       </a>
-                    <div className="flex items-center space-x-1">
-                      <button onClick={() => handleOpenEditModal(session)} className="text-blue-600 hover:text-blue-800 p-2 rounded-md hover:bg-blue-100 transition-colors" aria-label="Edit Sesi">
-                        <Edit size={18} />
-                      </button>
-                      <button onClick={() => confirmDeleteSession(session)} className="text-red-600 hover:text-red-800 p-2 rounded-md hover:bg-red-100 transition-colors" aria-label="Hapus Sesi">
-                        <Trash2 size={18} />
-                      </button>
+                      <span className={`absolute top-2 right-2 px-2.5 py-1 text-xs font-semibold rounded-full ${statusInfo.colorClass}`}>
+                          {statusInfo.text}
+                      </span>
+                    </div>
+                    <div className="p-4 flex flex-col flex-grow">
+                       <h3 className="font-bold text-lg text-gray-800 flex-grow" title={session.name}>{session.name}</h3>
+                       <div className="flex items-center text-gray-600 text-sm mt-2 flex-wrap gap-x-4 gap-y-1">
+                          <div className="flex items-center">
+                            <CalendarDays size={16} className="mr-1.5 text-gray-400" />
+                            <span>{new Date(session.date).toLocaleDateString('id-ID', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
+                          </div>
+                          <div className="flex items-center">
+                            <Clock size={16} className="mr-1.5 text-gray-400" />
+                            <span>{session.time} WIB</span>
+                          </div>
+                        </div>
+                    </div>
+                     <div className="flex items-center justify-between p-4 border-t border-gray-100">
+                       <a href={session.link} target="_blank" rel="noreferrer" className="flex items-center text-sm font-medium text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-3.5 py-2 rounded-md transition duration-150">
+                          <LinkIcon size={16} className="mr-1.5" /> Buka Link
+                        </a>
+                      <div className="flex items-center space-x-1">
+                        <button onClick={() => handleOpenEditModal(session)} className="text-blue-600 hover:text-blue-800 p-2 rounded-md hover:bg-blue-100 transition-colors" aria-label="Edit Sesi">
+                          <Edit size={18} />
+                        </button>
+                        <button onClick={() => confirmDeleteSession(session)} className="text-red-600 hover:text-red-800 p-2 rounded-md hover:bg-red-100 transition-colors" aria-label="Hapus Sesi">
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                )})}
             </div>
           )}
         </div>
@@ -320,7 +331,6 @@ export default function SesiLivePage() {
                   <input type="time" value={sessionTime} onChange={(e) => setSessionTime(e.target.value)} className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} required />
                 </div>
                 <input type="url" value={sessionLink} onChange={(e) => setSessionLink(e.target.value)} placeholder="Link Sesi Live (Zoom/Meet)" className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} required />
-                {/* --- BARU: Input gambar di modal tambah --- */}
                 <div>
                    <label className="block text-sm font-medium text-gray-700 mb-1">Gambar Banner <span className="text-gray-400">(Opsional)</span></label>
                    <input type="file" ref={addImageInputRef} onChange={(e) => setSessionImage(e.target.files[0])} className={`w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100 ${inputFocusColor} border border-gray-300 rounded-lg cursor-pointer`} accept="image/*" />
@@ -349,7 +359,6 @@ export default function SesiLivePage() {
                     <input type="time" value={editingSession.time} onChange={(e) => setEditingSession({...editingSession, time: e.target.value})} className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} required />
                 </div>
                 <input type="url" value={editingSession.link} onChange={(e) => setEditingSession({...editingSession, link: e.target.value})} className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} required />
-                {/* --- BARU: Input gambar di modal edit --- */}
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Ganti Gambar Banner <span className="text-gray-400">(Opsional)</span></label>
                     <input type="file" ref={editImageInputRef} onChange={(e) => setEditedSessionImage(e.target.files[0])} className={`w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100 ${inputFocusColor} border border-gray-300 rounded-lg cursor-pointer`} accept="image/*" />

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import MainLayout from "./layouts/MainLayout";
-import { app } from "../../api/firebaseConfig";
+import { app, db } from "../../api/firebaseConfig";
 import {
   getFirestore,
   collection,
@@ -15,11 +15,11 @@ import {
   orderBy,
   serverTimestamp,
 } from "firebase/firestore";
-import { getStorage, ref, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage";
-import { PlusCircle, X, FileText, Video, Trash2, Edit, CalendarDays } from 'lucide-react';
+// Impor storage tidak lagi diperlukan karena menggunakan API eksternal
+// import { getStorage, ref, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage";
+import { PlusCircle, X, FileText, Video, Trash2, Edit, CalendarDays, CheckCircle, Hourglass } from 'lucide-react';
 
-const db = getFirestore(app);
-const storage = getStorage(app);
+// const storage = getStorage(app); // Tidak lagi diperlukan
 
 export default function TugasPage() {
   const router = useRouter();
@@ -31,15 +31,19 @@ export default function TugasPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [tugasName, setTugasName] = useState('');
   const [deadline, setDeadline] = useState('');
-  const [fileTugasUrl, setFileTugasUrl] = useState('');
+  // --- DIUBAH: Mengganti state URL dengan state File ---
+  const [selectedFile, setSelectedFile] = useState(null);
   const [fileVideoPenjelasanUrl, setFileVideoPenjelasanUrl] = useState('');
-  const [coverImage, setCoverImage] = useState(null); // BARU
-  const addCoverImageInputRef = useRef(null); // BARU
+  const [coverImage, setCoverImage] = useState(null);
+  const addCoverImageInputRef = useRef(null);
+  const addFileInputRef = useRef(null); // Ref untuk input file tugas
 
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingTugas, setEditingTugas] = useState(null);
-  const [editedCoverImage, setEditedCoverImage] = useState(null); // BARU
-  const editCoverImageInputRef = useRef(null); // BARU
+  const [editedCoverImage, setEditedCoverImage] = useState(null);
+  const [editedSelectedFile, setEditedSelectedFile] = useState(null); // State untuk file edit
+  const editCoverImageInputRef = useRef(null);
+  const editFileInputRef = useRef(null); // Ref untuk input file edit
 
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
   const [tugasToDelete, setTugasToDelete] = useState(null);
@@ -49,6 +53,7 @@ export default function TugasPage() {
   const [alertType, setAlertType] = useState('success');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasMounted, setHasMounted] = useState(false);
+  const [currentTime, setCurrentTime] = useState(new Date());
 
   useEffect(() => {
     const classId = localStorage.getItem('idKelas');
@@ -57,6 +62,11 @@ export default function TugasPage() {
       setActiveClass({ id: classId, name: className });
     }
     setHasMounted(true);
+  }, []);
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 60000);
+    return () => clearInterval(timer);
   }, []);
 
   useEffect(() => {
@@ -89,39 +99,58 @@ export default function TugasPage() {
   };
 
   const resetAddForm = () => {
-    setTugasName(''); setDeadline(''); setFileTugasUrl(''); setFileVideoPenjelasanUrl('');
-    setCoverImage(null); // BARU
-    if(addCoverImageInputRef.current) addCoverImageInputRef.current.value = ""; // BARU
+    setTugasName(''); setDeadline(''); setFileVideoPenjelasanUrl('');
+    setSelectedFile(null);
+    setCoverImage(null);
+    if(addCoverImageInputRef.current) addCoverImageInputRef.current.value = "";
+    if(addFileInputRef.current) addFileInputRef.current.value = "";
   };
-
-  // --- BARU: Fungsi helper untuk upload file ---
-  const uploadFile = async (file, path) => {
+  
+  // --- DIUBAH: Fungsi upload menggunakan API eksternal ---
+  const uploadFileExternalApi = async (file) => {
     if (!file) return null;
-    const filePath = `${path}/${Date.now()}_${file.name}`;
-    const fileRef = ref(storage, filePath);
-    await uploadBytesResumable(fileRef, file);
-    const downloadURL = await getDownloadURL(fileRef);
-    return { url: downloadURL, path: filePath };
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const response = await fetch('https://apiimpact.coderchamps.co.id/api/v1/file/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      const result = await response.json();
+      if (result.status === true) {
+        return { url: result.path, fileId: result.fileId };
+      } else {
+        throw new Error(result.message || "Gagal mengunggah file.");
+      }
+    } catch (error) {
+      console.error("Error uploading to external API:", error);
+      throw error;
+    }
   };
 
   const handleAddTugas = async (e) => {
     e.preventDefault();
-    if (!tugasName.trim() || !fileTugasUrl.trim() || !deadline) {
-      showCustomAlert('Nama Tugas, URL File, dan Batas Akhir wajib diisi!', 'error');
+    if (!tugasName.trim() || !selectedFile || !deadline) {
+      showCustomAlert('Nama Tugas, File Tugas, dan Batas Akhir wajib diisi!', 'error');
       return;
     }
     setIsSubmitting(true);
     try {
-      const coverImageUpload = await uploadFile(coverImage, `tugas/${activeClass.id}/covers`);
+      const coverImageUpload = await uploadFileExternalApi(coverImage);
+      const fileTugasUpload = await uploadFileExternalApi(selectedFile);
+
+      if (!fileTugasUpload) {
+        throw new Error("File tugas wajib diunggah.");
+      }
 
       await addDoc(collection(db, 'tugas'), {
         kelas: activeClass.id,
         name: tugasName,
         deadline: new Date(deadline),
-        fileTugasUrl: fileTugasUrl,
+        fileTugasUrl: fileTugasUpload.url,
         fileVideoPenjelasanUrl: fileVideoPenjelasanUrl.trim() || null,
-        coverImageUrl: coverImageUpload?.url || null, // BARU
-        coverImagePath: coverImageUpload?.path || null, // BARU
+        coverImageUrl: coverImageUpload?.url || null,
         createdAt: serverTimestamp()
       });
       resetAddForm();
@@ -142,32 +171,36 @@ export default function TugasPage() {
       ...tugasItem,
       deadline: formattedDeadline,
     });
-    setEditedCoverImage(null); // BARU
-    if (editCoverImageInputRef.current) editCoverImageInputRef.current.value = ""; // BARU
+    setEditedCoverImage(null);
+    setEditedSelectedFile(null);
+    if (editCoverImageInputRef.current) editCoverImageInputRef.current.value = "";
+    if (editFileInputRef.current) editFileInputRef.current.value = "";
     setShowEditModal(true);
   };
 
   const handleSaveEdit = async (e) => {
     e.preventDefault();
-    if (!editingTugas || !editingTugas.name.trim() || !editingTugas.fileTugasUrl.trim() || !editingTugas.deadline) {
-      showCustomAlert('Semua field wajib diisi untuk edit!', 'error');
+    if (!editingTugas || !editingTugas.name.trim() || !editingTugas.deadline) {
+      showCustomAlert('Nama Tugas dan Batas Akhir wajib diisi!', 'error');
       return;
     }
     const tugasDocRef = doc(db, "tugas", editingTugas.id);
     setIsSubmitting(true);
     try {
-      const { id, kelas, createdAt, ...dataToUpdate } = editingTugas;
+      const { id, kelas, createdAt, coverImagePath, filePath, ...dataToUpdate } = editingTugas;
       dataToUpdate.deadline = new Date(editingTugas.deadline);
       dataToUpdate.updatedAt = serverTimestamp();
 
-      // --- BARU: Logika update gambar ---
       if (editedCoverImage) {
-        if (editingTugas.coverImagePath) {
-            await deleteObject(ref(storage, editingTugas.coverImagePath)).catch(console.error);
-        }
-        const upload = await uploadFile(editedCoverImage, `tugas/${activeClass.id}/covers`);
+        // NOTE: API Anda tidak punya fungsi hapus, file lama akan tetap ada.
+        const upload = await uploadFileExternalApi(editedCoverImage);
         dataToUpdate.coverImageUrl = upload.url;
-        dataToUpdate.coverImagePath = upload.path;
+      }
+
+      if (editedSelectedFile) {
+        // NOTE: API Anda tidak punya fungsi hapus, file lama akan tetap ada.
+        const upload = await uploadFileExternalApi(editedSelectedFile);
+        dataToUpdate.fileTugasUrl = upload.url;
       }
 
       await updateDoc(tugasDocRef, dataToUpdate);
@@ -191,10 +224,7 @@ export default function TugasPage() {
     if (!tugasToDelete) return;
     setIsSubmitting(true);
     try {
-      // --- BARU: Hapus gambar dari storage ---
-      if (tugasToDelete.coverImagePath) {
-        await deleteObject(ref(storage, tugasToDelete.coverImagePath)).catch(console.error);
-      }
+      // NOTE: API Anda tidak menyediakan fungsi delete, file akan tetap ada di server eksternal.
       await deleteDoc(doc(db, "tugas", tugasToDelete.id));
       showCustomAlert('Tugas berhasil dihapus!', 'success');
     } catch (error) {
@@ -210,6 +240,17 @@ export default function TugasPage() {
     if (!deadline) return "-";
     const dateObj = deadline.toDate ? deadline.toDate() : new Date(deadline);
     return dateObj.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' });
+  };
+
+  const getTugasStatus = (deadline) => {
+    if (!deadline) return { text: 'Tanpa Batas', colorClass: 'bg-gray-100 text-gray-700' };
+    const deadlineDate = deadline.toDate ? deadline.toDate() : new Date(deadline);
+    const now = currentTime;
+    
+    if (now > deadlineDate) {
+        return { text: 'Ditutup', colorClass: 'bg-red-100 text-red-700' };
+    }
+    return { text: 'Aktif', colorClass: 'bg-green-100 text-green-700' };
   };
 
   const primaryButtonColor = "bg-orange-500 hover:bg-orange-600 focus:ring-orange-500";
@@ -242,52 +283,59 @@ export default function TugasPage() {
               <p className="text-sm text-gray-400 mt-2">Klik "Tambah Tugas Baru" untuk menambahkan.</p>
             </div>
           ) : (
-            // --- DIUBAH: Tampilan list menjadi kartu ---
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-6">
-              {tugasList.map((item, index) => (
-                <div 
-                  key={item.id} 
-                  className={`bg-white border border-gray-200 rounded-xl flex flex-col shadow-sm hover:shadow-lg transition-shadow duration-300 ${hasMounted ? 'animate-fade-in-up' : 'opacity-0'}`}
-                  style={{ animationDelay: hasMounted ? `${(index * 0.05) + 0.2}s` : '0s' }}
-                >
-                  <img 
-                    src={item.coverImageUrl || `https://placehold.co/600x400/f97316/ffffff?text=Tugas`}
-                    alt={`Sampul untuk ${item.name}`}
-                    className="w-full h-32 object-cover rounded-t-xl"
-                    onError={(e) => { e.target.onerror = null; e.target.src=`https://placehold.co/600x400/f97316/ffffff?text=Tugas`}}
-                  />
-                  <div className="p-4 flex flex-col flex-grow">
-                    <p className="font-semibold text-lg text-gray-800 flex-grow" title={item.name}>{item.name}</p>
-                    <div className="flex items-center text-xs text-red-600 mt-2">
-                      <CalendarDays size={14} className="mr-1.5 text-red-400" />
-                      <span>Batas Akhir: {formatDeadline(item.deadline)}</span>
+              {tugasList.map((item, index) => {
+                const statusInfo = getTugasStatus(item.deadline);
+                return (
+                  <div 
+                    key={item.id} 
+                    className={`bg-white border border-gray-200 rounded-xl flex flex-col shadow-sm hover:shadow-lg transition-shadow duration-300 ${hasMounted ? 'animate-fade-in-up' : 'opacity-0'}`}
+                    style={{ animationDelay: hasMounted ? `${(index * 0.05) + 0.2}s` : '0s' }}
+                  >
+                    <div className="relative">
+                      <img 
+                        src={item.coverImageUrl || `/tugas.svg`}
+                        alt={`Sampul untuk ${item.name}`}
+                        className="w-full h-32 object-cover rounded-t-xl"
+                        onError={(e) => { e.target.onerror = null; e.target.src=`https://placehold.co/600x400/f97316/ffffff?text=Tugas`}}
+                      />
+                       <span className={`absolute top-2 right-2 px-2.5 py-1 text-xs font-semibold rounded-full ${statusInfo.colorClass}`}>
+                          {statusInfo.text}
+                       </span>
+                    </div>
+
+                    <div className="p-4 flex flex-col flex-grow">
+                      <p className="font-semibold text-lg text-gray-800 flex-grow" title={item.name}>{item.name}</p>
+                      <div className="flex items-center text-xs text-red-600 mt-2">
+                        <CalendarDays size={14} className="mr-1.5 text-red-400" />
+                        <span>Batas Akhir: {formatDeadline(item.deadline)}</span>
+                      </div>
+                    </div>
+                    <div className="p-2 border-t border-gray-100 grid grid-cols-2 gap-2">
+                        <a href={item.fileTugasUrl} target="_blank" rel="noreferrer" className="flex items-center justify-center text-sm font-medium text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-md transition duration-150">
+                          <FileText size={16} className="mr-1.5" /> Tugas
+                        </a>
+                        {item.fileVideoPenjelasanUrl && (
+                          <a href={item.fileVideoPenjelasanUrl} target="_blank" rel="noreferrer" className="flex items-center justify-center text-sm font-medium text-purple-600 hover:text-purple-700 bg-purple-50 hover:bg-purple-100 px-3 py-1.5 rounded-md transition duration-150">
+                            <Video size={16} className="mr-1.5" /> Video
+                          </a>
+                        )}
+                        <div className="col-span-2 flex justify-end">
+                          <button onClick={() => handleOpenEditModal(item)} className="text-blue-600 hover:text-blue-800 p-2 rounded-md hover:bg-blue-100 transition-colors" aria-label={`Edit tugas ${item.name}`}>
+                            <Edit size={18} />
+                          </button>
+                          <button onClick={() => confirmDeleteTugas(item)} className="text-red-600 hover:text-red-800 p-2 rounded-md hover:bg-red-100 transition-colors" aria-label={`Hapus tugas ${item.name}`}>
+                            <Trash2 size={18} />
+                          </button>
+                        </div>
                     </div>
                   </div>
-                  <div className="p-2 border-t border-gray-100 grid grid-cols-2 gap-2">
-                      <a href={item.fileTugasUrl} target="_blank" rel="noreferrer" className="flex items-center justify-center text-sm font-medium text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-md transition duration-150">
-                        <FileText size={16} className="mr-1.5" /> Tugas
-                      </a>
-                      {item.fileVideoPenjelasanUrl && (
-                        <a href={item.fileVideoPenjelasanUrl} target="_blank" rel="noreferrer" className="flex items-center justify-center text-sm font-medium text-purple-600 hover:text-purple-700 bg-purple-50 hover:bg-purple-100 px-3 py-1.5 rounded-md transition duration-150">
-                          <Video size={16} className="mr-1.5" /> Video
-                        </a>
-                      )}
-                      <div className="col-span-2 flex justify-end">
-                        <button onClick={() => handleOpenEditModal(item)} className="text-blue-600 hover:text-blue-800 p-2 rounded-md hover:bg-blue-100 transition-colors" aria-label={`Edit tugas ${item.name}`}>
-                          <Edit size={18} />
-                        </button>
-                        <button onClick={() => confirmDeleteTugas(item)} className="text-red-600 hover:text-red-800 p-2 rounded-md hover:bg-red-100 transition-colors" aria-label={`Hapus tugas ${item.name}`}>
-                          <Trash2 size={18} />
-                        </button>
-                      </div>
-                  </div>
-                </div>
-              ))}
+                )})}
             </div>
           )}
         </div>
 
-        {/* Modal Tambah Tugas */}
+        {/* --- DIUBAH: Modal Tambah Tugas sekarang menggunakan input file --- */}
         {showAddModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto">
             <div className="bg-white rounded-xl shadow-xl p-7 w-full max-w-lg relative animate-fade-in-up my-8">
@@ -296,9 +344,11 @@ export default function TugasPage() {
               <form onSubmit={handleAddTugas} className="space-y-4">
                 <input type="text" value={tugasName} onChange={(e) => setTugasName(e.target.value)} placeholder="Nama Tugas" className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} required />
                 <input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} required />
-                <input type="url" value={fileTugasUrl} onChange={(e) => setFileTugasUrl(e.target.value)} placeholder="URL File Tugas (PDF/DOC)" className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} required />
+                <div>
+                  <label htmlFor="fileTugas" className="block text-sm font-medium text-gray-700 mb-1">File Tugas (PDF/DOC)</label>
+                  <input type="file" id="fileTugas" ref={addFileInputRef} onChange={(e) => setSelectedFile(e.target.files[0])} className={`w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100 ${inputFocusColor} border border-gray-300 rounded-lg cursor-pointer`} required />
+                </div>
                 <input type="url" value={fileVideoPenjelasanUrl} onChange={(e) => setFileVideoPenjelasanUrl(e.target.value)} placeholder="URL Video Penjelasan (Opsional)" className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} />
-                {/* --- BARU: Input gambar sampul --- */}
                 <div>
                   <label htmlFor="coverImage" className="block text-sm font-medium text-gray-700 mb-1">Gambar Sampul (Opsional)</label>
                   <input type="file" id="coverImage" ref={addCoverImageInputRef} onChange={(e) => setCoverImage(e.target.files[0])} className={`w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100 ${inputFocusColor} border border-gray-300 rounded-lg cursor-pointer`} accept="image/*" />
@@ -314,7 +364,7 @@ export default function TugasPage() {
           </div>
         )}
         
-        {/* Modal Edit Tugas */}
+        {/* --- DIUBAH: Modal Edit Tugas sekarang menggunakan input file --- */}
         {showEditModal && editingTugas && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto">
             <div className="bg-white rounded-xl shadow-xl p-7 w-full max-w-lg relative animate-fade-in-up my-8">
@@ -323,9 +373,13 @@ export default function TugasPage() {
               <form onSubmit={handleSaveEdit} className="space-y-4">
                 <input type="text" value={editingTugas.name} onChange={(e) => setEditingTugas({...editingTugas, name: e.target.value})} className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} required />
                 <input type="date" value={editingTugas.deadline} onChange={(e) => setEditingTugas({...editingTugas, deadline: e.target.value})} className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} required />
-                <input type="url" value={editingTugas.fileTugasUrl} onChange={(e) => setEditingTugas({...editingTugas, fileTugasUrl: e.target.value})} className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} required />
-                <input type="url" value={editingTugas.fileVideoPenjelasanUrl || ''} onChange={(e) => setEditingTugas({...editingTugas, fileVideoPenjelasanUrl: e.target.value})} className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} />
-                {/* --- BARU: Input edit gambar sampul --- */}
+                 <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Ganti File Tugas (PDF/DOC)</label>
+                    {editingTugas.fileTugasUrl && <p className="text-xs mb-1 text-gray-500">File saat ini: <a href={editingTugas.fileTugasUrl} target="_blank" rel="noreferrer" className="text-blue-600 underline">Lihat File</a></p>}
+                    <input type="file" ref={editFileInputRef} onChange={(e) => setEditedSelectedFile(e.target.files[0])} className={`w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100 ${inputFocusColor} border border-gray-300 rounded-lg cursor-pointer`} />
+                    <p className="text-xs text-gray-500 mt-1">Kosongkan jika tidak ingin mengganti file.</p>
+                </div>
+                <input type="url" value={editingTugas.fileVideoPenjelasanUrl || ''} onChange={(e) => setEditingTugas({...editingTugas, fileVideoPenjelasanUrl: e.target.value})} placeholder="URL Video Penjelasan (Opsional)" className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg ${inputFocusColor} transition`} />
                 <div>
                   <label htmlFor="editedCoverImage" className="block text-sm font-medium text-gray-700 mb-1">Ganti Gambar Sampul (Opsional)</label>
                   <input type="file" id="editedCoverImage" ref={editCoverImageInputRef} onChange={(e) => setEditedCoverImage(e.target.files[0])} className={`w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100 ${inputFocusColor} border border-gray-300 rounded-lg cursor-pointer`} accept="image/*" />

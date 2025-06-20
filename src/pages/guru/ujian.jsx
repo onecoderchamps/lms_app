@@ -4,13 +4,14 @@ import {
   getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot,
   query, where, orderBy, serverTimestamp,
 } from 'firebase/firestore';
-import { getStorage, ref, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage";
+// Menghapus impor yang tidak lagi digunakan untuk storage
+// import { getStorage, ref, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage";
 import { app } from "../../api/firebaseConfig"; // Sesuaikan path jika perlu
 import MainLayout from "./layouts/MainLayout"; // Sesuaikan path jika perlu
 import { PlusCircle, X, CalendarDays, Clock, PlayCircle, CheckSquare, Hourglass, Edit, Trash2, FileText } from 'lucide-react';
 
 const db = getFirestore(app);
-const storage = getStorage(app);
+// const storage = getStorage(app); // Tidak lagi digunakan
 
 export default function UjianPage() {
   const router = useRouter();
@@ -106,13 +107,27 @@ export default function UjianPage() {
     if (addCoverImageInputRef.current) addCoverImageInputRef.current.value = "";
   };
   
-  const uploadFile = async (file, path) => {
+  // --- DIUBAH: Fungsi upload diganti untuk menggunakan API eksternal ---
+  const uploadFileExternalApi = async (file) => {
     if (!file) return null;
-    const filePath = `${path}/${Date.now()}_${file.name}`;
-    const fileRef = ref(storage, filePath);
-    await uploadBytesResumable(fileRef, file);
-    const downloadURL = await getDownloadURL(fileRef);
-    return { url: downloadURL, path: filePath };
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const response = await fetch('https://apiimpact.coderchamps.co.id/api/v1/file/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      const result = await response.json();
+      if (result.status === true) {
+        return { url: result.path, fileId: result.fileId };
+      } else {
+        throw new Error(result.message || "Gagal mengunggah file.");
+      }
+    } catch (error) {
+      console.error("Error uploading to external API:", error);
+      throw error;
+    }
   };
 
   const handleAddUjian = async (e) => {
@@ -123,7 +138,7 @@ export default function UjianPage() {
     }
     setIsSubmitting(true);
     try {
-      const coverImageUpload = await uploadFile(coverImage, `ujian/${activeClass.id}/covers`);
+      const coverImageUpload = await uploadFileExternalApi(coverImage);
       
       await addDoc(collection(db, 'ujian'), {
         kelas: activeClass.id,
@@ -132,17 +147,16 @@ export default function UjianPage() {
         time: waktuUjian,
         durationMinutes: parseInt(durasiUjian, 10),
         coverImageUrl: coverImageUpload?.url || null,
-        coverImagePath: coverImageUpload?.path || null,
+        // Tidak perlu menyimpan path jika API tidak punya fungsi delete
         createdAt: serverTimestamp()
       });
       
       resetAddForm();
       setShowAddModal(false);
-      // --- DIUBAH: Pesan notifikasi disesuaikan ---
       showCustomAlert('Jadwal ujian berhasil disimpan!', 'success');
 
     } catch (error) {
-      showCustomAlert('Gagal menambahkan ujian.', 'error');
+      showCustomAlert('Gagal menambahkan ujian: ' + error.message, 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -171,12 +185,9 @@ export default function UjianPage() {
       dataToUpdate.updatedAt = serverTimestamp();
 
       if (editedCoverImage) {
-        if (editingUjian.coverImagePath) {
-            await deleteObject(ref(storage, editingUjian.coverImagePath)).catch(console.error);
-        }
-        const upload = await uploadFile(editedCoverImage, `ujian/${activeClass.id}/covers`);
+        // NOTE: API Anda tidak punya fungsi delete. File lama akan tetap ada di server eksternal.
+        const upload = await uploadFileExternalApi(editedCoverImage);
         dataToUpdate.coverImageUrl = upload.url;
-        dataToUpdate.coverImagePath = upload.path;
       }
 
       await updateDoc(ujianDocRef, dataToUpdate);
@@ -200,9 +211,7 @@ export default function UjianPage() {
     if (!ujianToDelete) return;
     setIsSubmitting(true);
     try {
-      if (ujianToDelete.coverImagePath) {
-        await deleteObject(ref(storage, ujianToDelete.coverImagePath)).catch(console.error);
-      }
+      // NOTE: API Anda tidak punya fungsi delete. Kode ini hanya menghapus dari Firestore.
       await deleteDoc(doc(db, "ujian", ujianToDelete.id));
       showCustomAlert('Ujian berhasil dihapus!', 'success');
       setUjianToDelete(null);
@@ -252,7 +261,7 @@ export default function UjianPage() {
                   >
                     <div className="relative">
                        <img 
-                        src={ujian.coverImageUrl || `https://placehold.co/600x400/f97316/ffffff?text=Ujian`} 
+                        src={ujian.coverImageUrl || `/ujian.svg`} 
                         alt={`Sampul untuk ${ujian.name}`}
                         className="w-full h-32 object-cover rounded-t-xl"
                         onError={(e) => { e.target.onerror = null; e.target.src=`https://placehold.co/600x400/f97316/ffffff?text=Ujian`}}
@@ -277,10 +286,7 @@ export default function UjianPage() {
                     </div>
 
                     <div className="flex items-center justify-between space-x-1 p-2 border-t border-gray-100">
-                        <button onClick={() => {
-                          router.push(`/guru/soal?ujianId=` + ujian.id)
-                          localStorage.setItem('idUjian',ujian.id)
-                          }} className="flex-1 text-center text-xs font-medium text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-2 py-1.5 rounded-md transition duration-150">
+                        <button onClick={() => router.push(`/guru/soal?ujianId=${ujian.id}`)} className="flex-1 text-center text-xs font-medium text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-2 py-1.5 rounded-md transition duration-150">
                            Input Soal
                         </button>
                         <div className='flex'>
@@ -318,7 +324,6 @@ export default function UjianPage() {
                   </div>
                   <div className="flex justify-end space-x-3 pt-2">
                     <button type="button" onClick={() => setShowAddModal(false)} className="px-5 py-2.5 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300">Batal</button>
-                    {/* --- DIUBAH: Teks tombol disesuaikan --- */}
                     <button type="submit" disabled={isSubmitting} className={`px-5 py-2.5 ${primaryButtonColor} ${primaryButtonTextColor} rounded-lg shadow-md disabled:opacity-50`}>
                       {isSubmitting ? 'Menyimpan...' : 'Simpan Jadwal'}
                     </button>

@@ -1,10 +1,12 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import MainLayout from './layouts/MainLayout';
 import Link from 'next/link';
-import { BookOpen, Edit, ListChecks, FileText, Video, Loader, AlertTriangle } from 'lucide-react';
 import { db, auth } from "../../api/firebaseConfig";
-import { collection, query, where, getDocs, doc, getDoc, orderBy, limit, Timestamp } from 'firebase/firestore';
+// --- DIUBAH: Menambahkan 'limit' pada import dari firestore ---
+import { collection, getDocs, query, where, doc, getDoc, orderBy, Timestamp, limit } from 'firebase/firestore';
+import { BookText, ListChecks, Edit, Loader, AlertTriangle, Video, FileText } from 'lucide-react';
 import DashboardCalendar from './component/calendar';
+import { useAuth } from '@/component/AuthProvider';
 
 // Komponen Kartu Dashboard
 const DashboardCard = ({ title, value, subValue, icon, bgColorClasses, link, linkText, animationDelay }) => {
@@ -35,6 +37,7 @@ const DashboardCard = ({ title, value, subValue, icon, bgColorClasses, link, lin
 
 // --- Komponen Utama Dashboard Murid ---
 export default function MuridDashboardPage() {
+  const { user } = useAuth();
   const [dashboardData, setDashboardData] = useState({
     tugasMendatang: 0,
     ujianBerikutnya: { nama: 'Tidak ada', tanggal: 'Tidak ada jadwal' },
@@ -47,6 +50,11 @@ export default function MuridDashboardPage() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    if (!user) {
+        setLoading(false);
+        return;
+    };
+
     const fetchDashboardData = async (muridId) => {
       try {
         setLoading(true);
@@ -54,12 +62,18 @@ export default function MuridDashboardPage() {
         const userDocRef = doc(db, 'users', muridId);
         const userDocSnap = await getDoc(userDocRef);
         if (userDocSnap.exists()) {
-          setNamaMurid(userDocSnap.data().namaLengkap.split(' ')[0]);
+          setNamaMurid(userDocSnap.data().namaLengkap?.split(' ')[0] || 'Siswa');
         }
 
         const enrollmentsQuery = query(collection(db, 'enrollments'), where('muridId', '==', muridId));
         const enrollmentsSnapshot = await getDocs(enrollmentsQuery);
         const ids = enrollmentsSnapshot.docs.map(d => d.data().kelasId);
+        
+        if (ids.length === 0) {
+            setLoading(false);
+            setDashboardData(prev => ({...prev, tugasMendatang: 0, ujianBerikutnya: { nama: 'Tidak ada', tanggal: 'Tidak ada jadwal' }}));
+            return;
+        }
         setEnrolledKelasIds(ids);
         
         let tugasMendatangCount = 0;
@@ -67,33 +81,42 @@ export default function MuridDashboardPage() {
         let materiTerbaruData = [];
         let pengumumanTerbaruData = null;
 
-        if (ids.length > 0) {
-          const tugasQuery = query(collection(db, 'tugas'), where('kelas', 'in', ids), where('deadline', '>=', Timestamp.now()));
-          const ujianQuery = query(collection(db, 'ujian'), where('kelas', 'in', ids), where('date', '>=', Timestamp.now()), orderBy('date', 'asc'), limit(1));
-          const materiQuery = query(collection(db, 'materi'), where('kelas', 'in', ids), orderBy('createdAt', 'desc'), limit(4));
-          const pengumumanQuery = query(collection(db, 'pengumuman'), where('kelas', 'in', ids), orderBy('createdAt', 'desc'), limit(1));
+        const today = new Date();
+        const tugasQuery = query(collection(db, 'tugas'), where('kelas', 'in', ids), where('deadline', '>=', Timestamp.fromDate(today)));
+        const ujianQuery = query(collection(db, 'ujian'), where('kelas', 'in', ids), orderBy('date', 'asc'));
+        const materiQuery = query(collection(db, 'materi'), where('kelas', 'in', ids), orderBy('createdAt', 'desc'), limit(4));
+        const pengumumanQuery = query(collection(db, 'pengumuman'), where('kelas', 'in', ids), orderBy('createdAt', 'desc'), limit(1));
 
-          const [tugasSnap, ujianSnap, materiSnap, pengumumanSnap] = await Promise.all([
-            getDocs(tugasQuery), getDocs(ujianQuery), getDocs(materiQuery), getDocs(pengumumanQuery)
-          ]);
+        const [tugasSnap, ujianSnap, materiSnap, pengumumanSnap] = await Promise.all([
+          getDocs(tugasQuery), getDocs(ujianQuery), getDocs(materiQuery), getDocs(pengumumanQuery)
+        ]);
 
-          tugasMendatangCount = tugasSnap.size;
-          materiTerbaruData = materiSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        tugasMendatangCount = tugasSnap.size;
+        materiTerbaruData = materiSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-          if (!pengumumanSnap.empty) {
-            pengumumanTerbaruData = pengumumanSnap.docs[0].data();
-          }
+        if (!pengumumanSnap.empty) {
+          pengumumanTerbaruData = pengumumanSnap.docs[0].data();
+        }
 
-          if (!ujianSnap.empty) {
-            const ujian = ujianSnap.docs[0].data();
-            const kelasUjianRef = doc(db, 'kelas', ujian.kelas);
-            const kelasUjianSnap = await getDoc(kelasUjianRef);
-            const namaKelasUjian = kelasUjianSnap.exists() ? kelasUjianSnap.data().namaKelas : 'Ujian';
+        if (!ujianSnap.empty) {
+          const now = new Date();
+          const futureExams = ujianSnap.docs
+            .map(doc => ({id: doc.id, ...doc.data()}))
+            .filter(ujian => {
+                const ujianDateTime = new Date(`${ujian.date}T${ujian.time || '00:00'}:00`);
+                return ujianDateTime >= now;
+            });
             
-            ujianBerikutnyaData = {
-              nama: `${namaKelasUjian} - ${ujian.name}`,
-              tanggal: ujian.date.toDate().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
-            };
+          if(futureExams.length > 0) {
+              const ujian = futureExams[0];
+              const kelasUjianRef = doc(db, 'kelas', ujian.kelas);
+              const kelasUjianSnap = await getDoc(kelasUjianRef);
+              const namaKelasUjian = kelasUjianSnap.exists() ? kelasUjianSnap.data().namaKelas : 'Ujian';
+              
+              ujianBerikutnyaData = {
+                nama: `${namaKelasUjian} - ${ujian.name}`,
+                tanggal: new Date(ujian.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
+              };
           }
         }
         
@@ -112,15 +135,8 @@ export default function MuridDashboardPage() {
       }
     };
 
-    const unsubscribeAuth = auth.onAuthStateChanged(user => {
-      if (user) {
-        fetchDashboardData(user.uid);
-      } else {
-        setLoading(false);
-      }
-    });
-    return () => unsubscribeAuth();
-  }, []);
+    fetchDashboardData(user.uid);
+  }, [user]);
 
   if (loading) {
       return (
@@ -154,7 +170,6 @@ export default function MuridDashboardPage() {
           </div>
           
           <div className="space-y-6">
-            {/* --- BARIS ATAS: 2 KARTU --- */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <DashboardCard
                 title="Tugas Mendatang"
@@ -177,10 +192,8 @@ export default function MuridDashboardPage() {
               />
             </div>
 
-            {/* --- BARIS BAWAH: 3 BLOK --- */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Kolom 1: Materi Terbaru */}
-              <div className="bg-slate-50 p-6 rounded-xl shadow-inner animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
+              <div className="lg:col-span-2 bg-slate-50 p-6 rounded-xl shadow-inner animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
                 <h2 className="text-xl font-semibold text-gray-700 mb-4">Materi Terbaru</h2>
                 {dashboardData.materiTerbaru.length > 0 ? (
                   <ul className="space-y-3">
@@ -201,23 +214,23 @@ export default function MuridDashboardPage() {
                 )}
               </div>
 
-              {/* Kolom 2: Pengumuman */}
-              <div className="bg-slate-50 p-6 rounded-xl shadow-inner animate-fade-in-up" style={{ animationDelay: '0.5s' }}>
-                <h2 className="text-xl font-semibold text-gray-700 mb-4">Pengumuman</h2>
-                {dashboardData.pengumumanTerbaru ? (
-                   <div className="text-sm text-gray-600 p-4 bg-blue-50 border-l-4 border-blue-500 rounded-md">
-                     <p className="font-medium text-blue-700">Penting!</p>
-                     <p className="mt-1">{dashboardData.pengumumanTerbaru.isi}</p>
-                   </div>
-                ): (
-                  <p className="text-sm text-gray-500 text-center py-4">Tidak ada pengumuman baru.</p>
-                )}
-              </div>
+              <div className="space-y-6">
+                <div className="bg-slate-50 p-6 rounded-xl shadow-inner animate-fade-in-up" style={{ animationDelay: '0.5s' }}>
+                  <h2 className="text-xl font-semibold text-gray-700 mb-4">Pengumuman</h2>
+                  {dashboardData.pengumumanTerbaru ? (
+                      <div className="text-sm text-gray-600 p-4 bg-blue-50 border-l-4 border-blue-500 rounded-md">
+                        <p className="font-medium text-blue-700">Penting!</p>
+                        <p className="mt-1">{dashboardData.pengumumanTerbaru.isi}</p>
+                      </div>
+                  ): (
+                    <p className="text-sm text-gray-500 text-center py-4">Tidak ada pengumuman baru.</p>
+                  )}
+                </div>
 
-              {/* Kolom 3: Kalender */}
-              <div className="bg-slate-50/50 p-4 rounded-xl shadow-inner animate-fade-in-up" style={{ animationDelay: '0.6s' }}>
-                <h2 className="text-xl font-semibold text-gray-700 mb-2 text-center">Kalender Akademik</h2>
-                <DashboardCalendar enrolledKelasIds={enrolledKelasIds} />
+                <div className="bg-slate-50/50 p-4 rounded-xl shadow-inner animate-fade-in-up" style={{ animationDelay: '0.6s' }}>
+                  <h2 className="text-xl font-semibold text-gray-700 mb-2 text-center">Kalender Akademik</h2>
+                  <DashboardCalendar enrolledKelasIds={enrolledKelasIds} />
+                </div>
               </div>
             </div>
           </div>

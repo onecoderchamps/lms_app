@@ -25,7 +25,6 @@ const SansLogo = () => (
   </div>
 );
 
-// Bagian "Konfigurasi" dan item "Setting" telah dihapus dari array ini.
 const menuItems = [
   {
     section: "Main Menu",
@@ -50,14 +49,12 @@ const menuItems = [
   },
 ];
 
-const activeBg = "bg-orange-100";
-const activeTextColor = "text-orange-600";
-const activeFontWeight = "font-semibold";
-const hoverBg = "hover:bg-orange-500";
-const hoverTextColor = "hover:text-white";
-const defaultTextColor = "text-gray-700";
-const defaultIconColor = "text-gray-500";
-const activeIconColor = "text-orange-500";
+// --- DIUBAH: Variabel gaya disederhanakan untuk konsistensi ---
+const activeClasses = "bg-orange-100 text-orange-600 font-semibold";
+const hoverClasses = "hover:bg-orange-50 hover:text-orange-600";
+const defaultText = "text-gray-600";
+const defaultIcon = "text-gray-400";
+const activeIcon = "text-orange-600";
 
 export default function SidebarMurid() {
   const [openMenus, setOpenMenus] = useState({});
@@ -83,7 +80,7 @@ export default function SidebarMurid() {
   }, [router.pathname]);
 
   return (
-    <aside className="w-64 h-screen bg-white shadow-xl fixed top-0 left-0 overflow-y-auto flex flex-col">
+    <aside className="w-64 h-screen bg-white shadow-xl fixed top-0 left-0 overflow-y-auto flex flex-col font-sans">
       <div className="px-2 border-b border-gray-100">
         <SansLogo />
       </div>
@@ -102,26 +99,24 @@ export default function SidebarMurid() {
                     <div key={item.name}>
                       <button
                         onClick={() => toggleMenu(item.name)}
-                        className={`group flex items-center justify-between w-full px-3 py-2.5 rounded-md text-sm transition-colors duration-150 ${defaultTextColor} ${hoverBg} ${hoverTextColor}`}
+                        className={`group flex items-center justify-between w-full px-3 py-2.5 rounded-lg text-sm transition-colors duration-150 ${hoverClasses} ${parentIsActive ? 'font-semibold text-orange-600' : defaultText}`}
                       >
                         <div className="flex items-center space-x-3">
-                          <span className={`${parentIsActive || isOpen ? activeIconColor : defaultIconColor} group-hover:text-white transition-colors duration-150`}>
+                          <span className={`${parentIsActive ? activeIcon : defaultIcon} group-hover:text-orange-600 transition-colors duration-150`}>
                             {item.icon}
                           </span>
-                          <span className={parentIsActive ? 'font-medium' : ''}>{item.name}</span>
+                          <span>{item.name}</span>
                         </div>
-                        {isOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                        <ChevronDown size={18} className={`text-gray-400 group-hover:text-orange-600 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}/>
                       </button>
                       {isOpen && (
-                        <div className="pl-5 mt-1 space-y-0.5 border-l-2 border-orange-200 ml-[18px] mr-1 py-1">
+                        <div className="pl-6 mt-1 space-y-0.5 border-l-2 border-orange-100 ml-5 py-1">
                           {item.children.map((subItem) => (
                             <Link key={subItem.name} href={subItem.path} passHref
-                              className={`group flex items-center space-x-2.5 w-full px-3 py-2 rounded-md text-xs 
-                                ${ isActivePath(subItem.path)
-                                    ? `${activeBg} ${activeTextColor} ${activeFontWeight}`
-                                    : `text-gray-600 ${hoverBg} ${hoverTextColor}`
-                                } transition-colors duration-150`}>
-                              <span className={`${isActivePath(subItem.path) ? activeIconColor : 'text-gray-400'} group-hover:text-white transition-colors duration-150`}>
+                              className={`group flex items-center space-x-3 w-full pl-3 pr-2 py-2 rounded-md text-sm transition-colors duration-150
+                                ${ isActivePath(subItem.path) ? activeClasses : `${defaultText.replace('600', '500')} ${hoverClasses}` }`}
+                            >
+                              <span className={`${isActivePath(subItem.path) ? activeIcon : defaultIcon} group-hover:text-orange-600 transition-colors duration-150`}>
                                 {subItem.icon}
                               </span>
                               <span>{subItem.name}</span>
@@ -135,12 +130,10 @@ export default function SidebarMurid() {
 
                 return (
                   <Link key={item.name} href={item.path} passHref
-                    className={`group flex items-center space-x-3 px-3 py-2.5 rounded-md text-sm
-                      ${ isActivePath(item.path)
-                          ? `${activeBg} ${activeTextColor} ${activeFontWeight}`
-                          : `${defaultTextColor} ${hoverBg} ${hoverTextColor}`
-                      } transition-colors duration-150`}>
-                    <span className={`${isActivePath(item.path) ? activeIconColor : defaultIconColor} group-hover:text-white transition-colors duration-150`}>
+                    className={`group flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm transition-colors duration-150
+                      ${ isActivePath(item.path) ? activeClasses : `${defaultText} ${hoverClasses}`}`}
+                  >
+                    <span className={`${isActivePath(item.path) ? activeIcon : defaultIcon} group-hover:text-orange-600 transition-colors duration-150`}>
                       {item.icon}
                     </span>
                     <span>{item.name}</span>

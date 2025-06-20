@@ -1,14 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import MainLayout from './layouts/MainLayout';
-// --- DIUBAH: Menambahkan 'app' pada import dari firebaseConfig ---
-import { app, db, auth } from "../../api/firebaseConfig";
+import { db, auth, app } from "../../api/firebaseConfig"; 
 import { collection, getDocs, doc, query, where, onSnapshot, orderBy, setDoc, serverTimestamp, getDoc, documentId } from 'firebase/firestore';
 import { getStorage, ref, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage";
-import { FileText, UploadCloud, ExternalLink, CalendarDays, X as CloseIcon, CheckCircle, Star, Link as LinkIcon, Loader, Hourglass } from 'lucide-react';
+import { FileText, UploadCloud, CalendarDays, X as CloseIcon, CheckCircle, Star, Loader, Hourglass, Video } from 'lucide-react';
 import { useAuth } from '@/component/AuthProvider';
 import { onAuthStateChanged } from 'firebase/auth';
+import { useRouter } from 'next/router';
 
-// Inisialisasi Storage sekarang akan berjalan karena 'app' sudah diimpor
 const storage = getStorage(app); 
 
 export default function TugasMuridPage() {
@@ -18,7 +17,6 @@ export default function TugasMuridPage() {
   const [userClasses, setUserClasses] = useState(null);
   const [classDetails, setClassDetails] = useState({});
 
-  // State untuk semua modal
   const [showAlertModal, setShowAlertModal] = useState(false);
   const [alertMessage, setAlertMessage] = useState('');
   const [alertType, setAlertType] = useState('success');
@@ -31,6 +29,7 @@ export default function TugasMuridPage() {
   const [selectedTugasNilai, setSelectedTugasNilai] = useState(null);
   const [hasMounted, setHasMounted] = useState(false);
   const { user } = useAuth();
+  const router = useRouter();
 
   useEffect(() => {
     setHasMounted(true);
@@ -115,19 +114,26 @@ export default function TugasMuridPage() {
     return () => unsubscribe();
   }, [user]);
 
-  const combinedTugas = assignments.map(tugas => {
-    const submission = submissions[tugas.id];
-    const deadlineDate = tugas.deadline?.toDate ? tugas.deadline.toDate() : new Date(tugas.deadline);
-    const isOverdue = new Date() > deadlineDate && !submission;
-    
-    let status = 'Belum Dikerjakan';
-    if (submission) {
-      status = (submission.nilai !== null && submission.nilai !== undefined) ? 'Sudah Dinilai' : 'Sudah Dikumpulkan';
-    } else if (isOverdue) {
-      status = 'Terlambat';
-    }
-    return { ...tugas, status, submissionData: submission || null };
-  });
+  const combinedTugas = useMemo(() => {
+    return assignments.map(tugas => {
+        const submission = submissions[tugas.id];
+        const deadlineDate = tugas.deadline?.toDate ? tugas.deadline.toDate() : new Date(tugas.deadline);
+        const isOverdue = new Date() > deadlineDate;
+        
+        let status = 'Belum Dikerjakan';
+        let action = 'kumpulkan';
+
+        if (submission) {
+        status = (submission.nilai !== null && submission.nilai !== undefined) ? 'Sudah Dinilai' : 'Sudah Dikumpulkan';
+        action = (status === 'Sudah Dinilai') ? 'lihat_nilai' : 'perbarui';
+        } else if (isOverdue) {
+        status = 'Terlambat';
+        action = 'terlambat';
+        }
+        return { ...tugas, status, action, submissionData: submission || null };
+    });
+  }, [assignments, submissions]);
+
 
   const showCustomAlert = (message, type = "success") => {
     setAlertMessage(message);
@@ -195,11 +201,11 @@ export default function TugasMuridPage() {
   
   const getStatusProps = (status) => {
       switch (status) {
-          case 'Sudah Dinilai': return { color: 'bg-green-500', icon: <CheckCircle size={16} /> };
-          case 'Sudah Dikumpulkan': return { color: 'bg-yellow-500', icon: <Hourglass size={16} /> };
-          case 'Terlambat': return { color: 'bg-gray-500', icon: <CalendarDays size={16} /> };
+          case 'Sudah Dinilai': return { color: 'bg-green-100 text-green-700', icon: <CheckCircle size={16} /> };
+          case 'Sudah Dikumpulkan': return { color: 'bg-yellow-100 text-yellow-700', icon: <Hourglass size={16} /> };
+          case 'Terlambat': return { color: 'bg-gray-100 text-gray-700', icon: <CalendarDays size={16} /> };
           case 'Belum Dikerjakan':
-          default: return { color: 'bg-red-500', icon: <CloseIcon size={16} /> };
+          default: return { color: 'bg-red-100 text-red-700', icon: <CloseIcon size={16} /> };
       }
   };
 
@@ -209,7 +215,7 @@ export default function TugasMuridPage() {
         <div className="max-w-full mx-auto bg-white rounded-xl shadow-xl p-6 md:p-8">
           <div className={`mb-8 ${hasMounted ? 'animate-fade-in-up' : 'opacity-0'}`} style={{ animationDelay: '0.1s' }}>
             <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Tugas Saya</h1>
-            <p className="mt-1 text-gray-500">Daftar semua tugas dari kelas yang Anda ikuti.</p>
+            <p className="mt-1 text-orange-600 font-semibold">{Object.values(classDetails).join(', ')}</p>
           </div>
 
           {loading ? (
@@ -231,19 +237,22 @@ export default function TugasMuridPage() {
                     className={`bg-white rounded-xl shadow-lg overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-1.5 flex flex-col ${hasMounted ? 'animate-fade-in-up' : 'opacity-0'}`}
                     style={{ animationDelay: hasMounted ? `${(index * 0.05) + 0.2}s` : '0s' }}
                   >
-                    <div className={`relative p-3 text-white font-semibold text-sm flex items-center gap-2 ${statusProps.color}`}>
-                      {statusProps.icon}
-                      <span>{item.status}</span>
+                    <div className="relative">
+                        <img 
+                            src={item.coverImageUrl || `/tugas.svg`}
+                            alt={`Sampul untuk ${item.name}`}
+                            className="w-full h-32 object-cover"
+                            onError={(e) => { e.target.onerror = null; e.target.src=`https://placehold.co/600x400/f97316/ffffff?text=Tugas`}}
+                        />
+                        <span className={`absolute top-2 right-2 px-2.5 py-1 text-xs font-semibold rounded-full flex items-center gap-1.5 ${statusProps.color}`}>
+                            {statusProps.icon}
+                            {item.status}
+                        </span>
                     </div>
-                    <img 
-                        src={item.coverImageUrl || `https://placehold.co/600x400/f97316/ffffff?text=Tugas`}
-                        alt={`Sampul untuk ${item.name}`}
-                        className="w-full h-32 object-cover"
-                        onError={(e) => { e.target.onerror = null; e.target.src=`https://placehold.co/600x400/f97316/ffffff?text=Tugas`}}
-                    />
                     <div className="p-5 flex flex-col flex-grow">
                       <p className="font-semibold text-md text-gray-800 mb-1.5 leading-tight flex-grow min-h-[3.5rem] line-clamp-3" title={item.name}>{item.name}</p>
-                      <p className="text-xs text-gray-500 mb-3">Kelas: {classDetails[item.kelas] || item.kelas}</p>
+                      {/* --- DIUBAH: Menambahkan kembali nama kelas di dalam kartu --- */}
+                      <p className="text-xs text-gray-500 mb-3">Kelas: {classDetails[item.kelas]}</p>
                       <div className="flex items-center text-red-600 text-xs mb-3">
                         <CalendarDays size={14} className="mr-2 text-red-400" />
                         <span>Batas Akhir: {item.deadline?.toDate ? item.deadline.toDate().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }) : new Date(item.deadline).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
@@ -252,19 +261,22 @@ export default function TugasMuridPage() {
                         <a href={item.fileTugasUrl} target="_blank" rel="noreferrer" className="flex items-center justify-center px-4 py-2.5 rounded-lg transition duration-300 text-sm font-medium w-full shadow-sm bg-blue-50 text-blue-700 hover:bg-blue-100">
                           <FileText size={16} className="mr-2" /> Lihat Soal Tugas
                         </a>
-                        {item.status === 'Belum Dikerjakan' || item.status === 'Terlambat' || item.status === 'Sudah Dikumpulkan' ? (
-                          <button onClick={() => handleOpenSubmitModal(item)}
-                            className={`flex items-center justify-center px-4 py-2.5 rounded-lg shadow-md transition duration-300 text-sm font-medium w-full ${item.status === 'Sudah Dikumpulkan' ? 'bg-yellow-500 text-white' : `${primaryButtonColor} ${primaryButtonTextColor}`}`}
-                          >
-                            <UploadCloud size={16} className="mr-2" /> 
-                            {item.status === 'Sudah Dikumpulkan' ? 'Perbarui Jawaban' : 'Kumpulkan Tugas'}
-                          </button>
+                        {item.action === 'kumpulkan' ? (
+                            <button onClick={() => handleOpenSubmitModal(item)} className={`flex items-center justify-center px-4 py-2.5 rounded-lg shadow-md transition duration-300 text-sm font-medium w-full ${primaryButtonColor} ${primaryButtonTextColor}`}>
+                                <UploadCloud size={16} className="mr-2" /> Kumpulkan Tugas
+                            </button>
+                        ) : item.action === 'perbarui' ? (
+                            <button onClick={() => handleOpenSubmitModal(item)} className="flex items-center justify-center px-4 py-2.5 rounded-lg shadow-md transition duration-300 text-sm font-medium w-full bg-yellow-500 text-white">
+                                <UploadCloud size={16} className="mr-2" /> Perbarui Jawaban
+                            </button>
+                        ) : item.action === 'lihat_nilai' ? (
+                            <button onClick={() => handleOpenNilaiModal(item)} className="flex items-center justify-center px-4 py-2.5 rounded-lg shadow-md transition duration-300 text-sm font-medium w-full bg-green-500 text-white">
+                                <Star size={16} className="mr-2" /> Lihat Nilai
+                            </button>
                         ) : (
-                          <button onClick={() => handleOpenNilaiModal(item)}
-                              className="flex items-center justify-center px-4 py-2.5 rounded-lg shadow-md transition duration-300 text-sm font-medium w-full bg-green-500 text-white"
-                          >
-                            <Star size={16} className="mr-2" /> Lihat Nilai & Feedback
-                          </button>
+                            <button className="flex items-center justify-center px-4 py-2.5 rounded-lg shadow-sm transition duration-300 text-sm font-medium w-full bg-gray-200 text-gray-500 cursor-not-allowed" disabled>
+                                <CloseIcon size={16} className="mr-2" /> Batas Akhir Terlewat
+                            </button>
                         )}
                       </div>
                     </div>

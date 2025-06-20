@@ -1,23 +1,81 @@
-import { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/router';
-import Link from 'next/link';
-import { Pencil, Trash2, Plus, Settings, User, LogOut, BookOpen, X /*, Camera*/ } from 'lucide-react';
+'use client';
+
+import Link from "next/link";
+import { useRouter } from "next/router";
+import { useState, useEffect, useRef } from "react";
+import {
+  LayoutDashboard,
+  Users,
+  BookText,
+  MonitorPlay,
+  FileText,
+  ListChecks,
+  Edit,
+  ClipboardCheck,
+  ChevronDown,
+  ChevronUp,
+  BookCheck,
+  FilePen,
+  Settings,
+  User,
+  LogOut,
+  BookOpen,
+  X,
+  Camera, // Tambahkan ikon Kamera
+  Plus,
+  Pencil,
+  Trash2,
+  AlertTriangle,
+  Info,
+} from 'lucide-react';
 import {
   collection, addDoc, getDocs, doc,
   updateDoc, deleteDoc, query, where, serverTimestamp,
   orderBy
 } from 'firebase/firestore';
 import { updateProfile, updatePassword } from 'firebase/auth';
-// --- Impor untuk Storage dinonaktifkan ---
-// import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, auth } from '../../api/firebaseConfig';
 import { useAuth } from '@/component/AuthProvider';
+
+const SansLogo = () => (
+  <div className="flex flex-col items-center justify-center py-4">
+    <img
+      src="/logo.png"
+      alt="CoderChamps Logo"
+      className="h-12 w-auto"
+    />
+  </div>
+);
+
+// Menu sidebar (diasumsikan sudah benar)
+const menuItems = [
+    {
+      section: "Main Menu",
+      items: [
+        { name: "Beranda", path: "/guru/dashboard", icon: <LayoutDashboard size={20} /> },
+        { name: "Member", path: "/guru/member", icon: <Users size={20} /> },
+        {
+          name: "Kelas",
+          icon: <BookText size={20} />,
+          children: [
+            { name: "Sesi Live", path: "/guru/sesi-live", icon: <MonitorPlay size={18} /> },
+            { name: "Materi", path: "/guru/materi", icon: <FileText size={18} /> },
+            { name: "Ujian", path: "/guru/ujian", icon: <ListChecks size={18} />},
+            { name: "Input Soal", path: "/guru/soal", icon: <Edit size={18} /> },
+            { name: "Tugas", path: "/guru/tugas", icon: <Edit size={18} /> },
+            { name: "Beri Nilai Tugas", path: "/guru/berikan-nilai", icon: <BookCheck size={18} /> },
+            { name: "Beri Nilai Ujian", path: "/guru/nilai-ujian", icon: <FilePen size={18} /> },
+            { name: "Absen", path: "/guru/absen", icon: <ClipboardCheck size={18} /> },
+          ],
+        },
+      ],
+    },
+  ];
 
 export default function GuruManajemenKelasPage() {
   const { user, logout } = useAuth();
   const router = useRouter();
-
-  // State untuk modal Buat/Edit Kelas
+  
   const [kelasList, setKelasList] = useState([]);
   const [namaKelas, setNamaKelas] = useState('');
   const [keterangan, setKeterangan] = useState('');
@@ -28,15 +86,14 @@ export default function GuruManajemenKelasPage() {
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
   const settingsMenuRef = useRef(null);
   
-  // State untuk modal Edit Profil
   const [showEditProfileModal, setShowEditProfileModal] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [editNama, setEditNama] = useState('');
   const [editPassword, setEditPassword] = useState('');
   const [editConfirmPassword, setEditConfirmPassword] = useState('');
-  // --- State untuk foto dinonaktifkan ---
-  // const [editFoto, setEditFoto] = useState(null);
-  // const [editFotoPreview, setEditFotoPreview] = useState('');
+  // --- DIUBAH: State untuk foto diaktifkan kembali ---
+  const [editFoto, setEditFoto] = useState(null);
+  const [editFotoPreview, setEditFotoPreview] = useState('');
 
   const fetchKelas = async () => {
     if (!user) return;
@@ -69,6 +126,29 @@ export default function GuruManajemenKelasPage() {
     setNamaKelas('');
     setKeterangan('');
     setEditId(null);
+  };
+
+  // --- DIUBAH: Fungsi upload file menggunakan API eksternal ---
+  const uploadFileExternalApi = async (file) => {
+    if (!file) return null;
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const response = await fetch('https://apiimpact.coderchamps.co.id/api/v1/file/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      const result = await response.json();
+      if (result.status === true) {
+        return { url: result.path }; // Hanya butuh URL
+      } else {
+        throw new Error(result.message || "Gagal mengunggah file ke API eksternal.");
+      }
+    } catch (error) {
+      console.error("Error uploading file to external API:", error);
+      throw error;
+    }
   };
 
   const handleSubmitKelas = async (e) => {
@@ -124,13 +204,14 @@ export default function GuruManajemenKelasPage() {
       setEditNama(user.namaLengkap || '');
       setEditPassword('');
       setEditConfirmPassword('');
-      // --- Logika untuk foto dinonaktifkan ---
-      // setEditFotoPreview(user.photoURL || '');
-      // setEditFoto(null);
+      // --- DIUBAH: Logika untuk foto diaktifkan kembali ---
+      setEditFotoPreview(user.photoURL || '');
+      setEditFoto(null);
       setShowEditProfileModal(true);
     }
   };
 
+  // --- DIUBAH: Logika update profil dengan unggah foto ke API eksternal ---
   const handleProfileUpdate = async (e) => {
     e.preventDefault();
     if (!auth.currentUser) {
@@ -143,23 +224,26 @@ export default function GuruManajemenKelasPage() {
     }
     setIsUpdating(true);
     try {
-      // --- Logika upload foto dinonaktifkan ---
-      // let fotoURL = user.photoURL;
-      // if (editFoto) {
-      //   const storage = getStorage();
-      //   const storageRef = ref(storage, `profile_pictures/${user.uid}`);
-      //   await uploadBytes(storageRef, editFoto);
-      //   fotoURL = await getDownloadURL(storageRef);
-      // }
+      let fotoURL = user.photoURL; // Defaultnya adalah URL yang sudah ada
+      
+      // Jika ada file foto baru yang dipilih, unggah
+      if (editFoto) {
+        const uploadResult = await uploadFileExternalApi(editFoto);
+        if (uploadResult) {
+            fotoURL = uploadResult.url;
+        }
+      }
 
+      // Update profil di Firebase Auth
       await updateProfile(auth.currentUser, { 
         displayName: editNama, 
-        // photoURL: fotoURL 
+        photoURL: fotoURL 
       });
 
+      // Update data di Firestore
       await updateDoc(doc(db, "users", user.uid), { 
         namaLengkap: editNama, 
-        // photoURL: fotoURL
+        photoURL: fotoURL
       });
 
       if (editPassword) {
@@ -172,7 +256,7 @@ export default function GuruManajemenKelasPage() {
       }
       alert("Profil berhasil diperbarui!");
       setShowEditProfileModal(false);
-      router.reload();
+      router.reload(); // Reload halaman untuk melihat perubahan
     } catch (error) {
       console.error("Gagal update profil:", error);
       if (error.code === 'auth/requires-recent-login') {
@@ -311,6 +395,7 @@ export default function GuruManajemenKelasPage() {
         </div>
       )}
 
+      {/* --- DIUBAH: Modal edit profil diaktifkan kembali --- */}
       {showEditProfileModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md animate-fade-in-up">
@@ -321,7 +406,6 @@ export default function GuruManajemenKelasPage() {
               </button>
             </div>
             <form onSubmit={handleProfileUpdate} className="p-6 space-y-4">
-              {/*
               <div className="flex flex-col items-center space-y-2">
                   <div className="relative">
                       <img src={editFotoPreview || `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.namaLengkap || '..')}&background=f97316&color=fff&bold=true`} alt="Foto Profil" className="w-24 h-24 rounded-full object-cover border-2 border-white shadow-md"/>
@@ -336,7 +420,6 @@ export default function GuruManajemenKelasPage() {
                       </label>
                   </div>
               </div>
-              */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Nama Lengkap</label>
                 <input type="text" value={editNama} onChange={(e) => setEditNama(e.target.value)} className="w-full border px-3 py-2 rounded-md focus:ring-orange-500 focus:border-orange-500" required/>
@@ -360,7 +443,7 @@ export default function GuruManajemenKelasPage() {
           </div>
         </div>
       )}
-       <style jsx global>{`
+      <style jsx global>{`
         @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
         .animate-fade-in-up { animation: fadeInUp 0.4s ease-out forwards; opacity: 0; }
       `}</style>

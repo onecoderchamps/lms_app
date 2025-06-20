@@ -1,13 +1,12 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
+import MainLayout from './layouts/MainLayout';
 import Link from 'next/link';
-import { Settings, User, LogOut, BookOpen, X, Camera } from 'lucide-react';
+import { Settings, User, LogOut, BookOpen, X, Camera, Plus } from 'lucide-react';
 import {
   collection, getDocs, query, where, getDoc, doc, updateDoc
 } from 'firebase/firestore';
 import { updateProfile, updatePassword } from 'firebase/auth';
-// --- Impor untuk Storage dinonaktifkan ---
-// import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, auth } from '../../api/firebaseConfig';
 import { useAuth } from '@/component/AuthProvider';
 
@@ -25,11 +24,10 @@ export default function MuridPilihKelasPage() {
   const [editNama, setEditNama] = useState('');
   const [editPassword, setEditPassword] = useState('');
   const [editConfirmPassword, setEditConfirmPassword] = useState('');
-
-  // --- FITUR FOTO PROFIL DINONAKTIFKAN SEMENTARA (START) ---
-  // const [editFoto, setEditFoto] = useState(null);
-  // const [editFotoPreview, setEditFotoPreview] = useState('');
-  // --- FITUR FOTO PROFIL DINONAKTIFKAN SEMENTARA (END) ---
+  
+  // --- DIUBAH: State untuk foto diaktifkan kembali ---
+  const [editFoto, setEditFoto] = useState(null);
+  const [editFotoPreview, setEditFotoPreview] = useState('');
 
   useEffect(() => {
     const fetchEnrolledClasses = async () => {
@@ -85,54 +83,79 @@ export default function MuridPilihKelasPage() {
     localStorage.setItem('namaKelas', namaKelas);
     router.push('/murid/dashboard');
   };
-
+  
   const handleOpenEditModal = () => {
     if (user) {
       setEditNama(user.namaLengkap || '');
       setEditPassword('');
       setEditConfirmPassword('');
-      // --- FITUR FOTO PROFIL DINONAKTIFKAN SEMENTARA (START) ---
-      // setEditFotoPreview(user.photoURL || '');
-      // setEditFoto(null);
-      // --- FITUR FOTO PROFIL DINONAKTIFKAN SEMENTARA (END) ---
+      // --- DIUBAH: State untuk foto diaktifkan kembali ---
+      setEditFotoPreview(user.photoURL || '');
+      setEditFoto(null);
       setShowEditProfileModal(true);
     }
   };
   
+  // --- BARU: Fungsi untuk unggah file ke API eksternal ---
+  const uploadFileExternalApi = async (file) => {
+    if (!file) return null;
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const response = await fetch('https://apiimpact.coderchamps.co.id/api/v1/file/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      const result = await response.json();
+      if (result.status === true) {
+        return { url: result.path };
+      } else {
+        throw new Error(result.message || "Gagal mengunggah file.");
+      }
+    } catch (error) {
+      console.error("Error uploading file to external API:", error);
+      throw error;
+    }
+  };
+
+  // --- DIUBAH: Logika update profil dengan unggah foto ke API eksternal ---
   const handleProfileUpdate = async (e) => {
     e.preventDefault();
-    if (!auth.currentUser) return;
-    if (editPassword !== editConfirmPassword) {
-      alert("Password dan konfirmasi password tidak cocok!");
-      return;
+    if (!auth.currentUser) {
+        alert("Sesi Anda telah berakhir. Silakan login kembali.");
+        return;
+    }
+    if (editPassword && editPassword !== editConfirmPassword) {
+        alert("Password dan konfirmasi password tidak cocok!");
+        return;
     }
     setIsUpdating(true);
     try {
-      // --- FITUR FOTO PROFIL DINONAKTIFKAN SEMENTARA (START) ---
-      // let fotoURL = user.photoURL;
-      // if (editFoto) {
-      //   const storage = getStorage();
-      //   const storageRef = ref(storage, `profile_pictures/${user.uid}`);
-      //   await uploadBytes(storageRef, editFoto);
-      //   fotoURL = await getDownloadURL(storageRef);
-      // }
-      // --- FITUR FOTO PROFIL DINONAKTIFKAN SEMENTARA (END) ---
+      let fotoURL = user.photoURL;
+      
+      if (editFoto) {
+        const uploadResult = await uploadFileExternalApi(editFoto);
+        if (uploadResult) {
+            fotoURL = uploadResult.url;
+        }
+      }
 
       await updateProfile(auth.currentUser, { 
         displayName: editNama, 
-        // photoURL: fotoURL // Dinonaktifkan
+        photoURL: fotoURL 
       });
 
       await updateDoc(doc(db, "users", user.uid), { 
         namaLengkap: editNama, 
-        // photoURL: fotoURL // Dinonaktifkan
+        photoURL: fotoURL
       });
 
       if (editPassword) {
         if (editPassword.length < 6) {
-          alert("Password baru minimal 6 karakter!");
-          setIsUpdating(false);
-          return;
+            alert("Password baru minimal 6 karakter!");
+            setIsUpdating(false);
+            return;
         }
         await updatePassword(auth.currentUser, editPassword);
       }
@@ -142,9 +165,9 @@ export default function MuridPilihKelasPage() {
     } catch (error) {
       console.error("Gagal update profil:", error);
       if (error.code === 'auth/requires-recent-login') {
-        alert("Untuk mengubah password, Anda perlu login kembali demi keamanan.");
+          alert("Untuk mengubah password, Anda perlu login kembali demi keamanan.");
       } else {
-        alert("Gagal memperbarui profil: " + error.message);
+          alert("Gagal memperbarui profil: " + error.message);
       }
     } finally {
       setIsUpdating(false);
@@ -182,22 +205,22 @@ export default function MuridPilihKelasPage() {
           </button>
           {showSettingsMenu && (
             <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl z-50">
-                <div className="p-2">
-                    <div className="px-3 py-2">
-                        <p className="text-sm font-semibold text-gray-800">{user?.namaLengkap || 'Murid'}</p>
-                        <p className="text-xs text-gray-500 truncate">{user?.email}</p>
-                    </div>
-                    <div className="h-px bg-gray-200 my-2" />
-                    <button onClick={handleOpenEditModal} className="flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md w-full">
-                        <User size={16} className="mr-2" />
-                        Edit Profil
-                    </button>
-                    <div className="h-px bg-gray-200 my-2" />
-                    <button onClick={handleLogout} className="flex items-center px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-md w-full">
-                        <LogOut size={16} className="mr-2" />
-                        Logout
-                    </button>
+              <div className="p-2">
+                <div className="px-3 py-2">
+                  <p className="text-sm font-semibold text-gray-800">{user?.namaLengkap || 'Murid'}</p>
+                  <p className="text-xs text-gray-500 truncate">{user?.email}</p>
                 </div>
+                <div className="h-px bg-gray-200 my-2" />
+                <button onClick={handleOpenEditModal} className="flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md w-full">
+                  <User size={16} className="mr-2" />
+                  Edit Profil
+                </button>
+                <div className="h-px bg-gray-200 my-2" />
+                <button onClick={handleLogout} className="flex items-center px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-md w-full">
+                  <LogOut size={16} className="mr-2" />
+                  Logout
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -246,8 +269,7 @@ export default function MuridPilihKelasPage() {
             </div>
             <form onSubmit={handleProfileUpdate} className="p-6 space-y-4">
               
-              {/* --- FITUR FOTO PROFIL DINONAKTIFKAN SEMENTARA (START) --- */}
-              {/*
+              {/* --- DIUBAH: Fitur foto profil diaktifkan kembali --- */}
               <div className="flex flex-col items-center space-y-2">
                   <div className="relative">
                       <img src={editFotoPreview || `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.namaLengkap || '..')}&background=f97316&color=fff&bold=true`} alt="Foto Profil" className="w-24 h-24 rounded-full object-cover border-2 border-white shadow-md"/>
@@ -255,15 +277,13 @@ export default function MuridPilihKelasPage() {
                           <Camera size={16} />
                           <input type="file" id="fotoProfil" className="hidden" accept="image/*" onChange={(e) => {
                               if (e.target.files[0]) {
-                                  // setEditFoto(e.target.files[0]);
-                                  // setEditFotoPreview(URL.createObjectURL(e.target.files[0]));
+                                  setEditFoto(e.target.files[0]);
+                                  setEditFotoPreview(URL.createObjectURL(e.target.files[0]));
                               }
                           }}/>
                       </label>
                   </div>
               </div>
-              */}
-              {/* --- FITUR FOTO PROFIL DINONAKTIFKAN SEMENTARA (END) --- */}
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Nama Lengkap</label>
