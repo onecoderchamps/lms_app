@@ -357,7 +357,7 @@ export default function MateriPage() {
         {/* Modal-modal lainnya ... */}
         {showAddModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto">
-            <div className="bg-white rounded-xl shadow-2xl p-7 w-full max-w-lg relative animate-fade-in-up my-8 border-t-4 border-orange-500">
+            <div className="bg-white rounded-xl shadow-2xl p-7 w-full max-w-lg relative animate-fade-in-up my-8 border-t-4 ">
               <button onClick={() => setShowAddModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-700"><X size={24}/></button>
               <h2 className="text-xl font-semibold mb-6 text-center text-gray-800">Tambah Materi Baru</h2>
               <form onSubmit={handleAddMateri} className="space-y-4">
@@ -387,6 +387,16 @@ export default function MateriPage() {
             </div>
           </div>
         )}
+        <style jsx>{`
+            @keyframes fadeInUp {
+                from { opacity: 0; transform: translateY(20px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+            .animate-fade-in-up {
+                animation: fadeInUp 0.4s ease-out forwards;
+                opacity: 0; 
+            }
+        `}</style>
       </main>
     </MainLayout>
   );

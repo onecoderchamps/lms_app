@@ -336,7 +336,7 @@ export default function UjianPage() {
         {/* Modal Edit Ujian */}
         {showEditModal && editingUjian && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto">
-            <div className="bg-white rounded-xl shadow-xl p-7 w-full max-w-lg relative animate-fade-in-up my-8">
+            <div className="bg-white rounded-xl shadow-xl p-7 w-full max-w-lg relative animate-fade-in-up my-8 ">
               <button onClick={handleCancelEdit} className="absolute top-4 right-4 text-gray-400 hover:text-gray-700"><X size={24} /></button>
               <h2 className="text-xl font-semibold mb-6 text-center text-gray-800">Edit Ujian</h2>
               <form onSubmit={handleSaveEditUjian} className="space-y-4">

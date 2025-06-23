@@ -2,7 +2,6 @@ import Header from "../component/header";
 import Sidebar from "../component/sidebar";
 
 export default function MainLayout({ children }) {
-
   return (
     <div className="flex">
       <Sidebar />
