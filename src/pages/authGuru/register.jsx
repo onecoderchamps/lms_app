@@ -40,8 +40,8 @@ export default function RegisterGuruPage() {
         uid: user.uid,
         namaLengkap,
         email,
-        role: "guru",
-        createdAt: serverTimestamp(),
+        role: "guru", // Role specifically set as "guru" for this page
+        createdAt: serverTimestamp(), // Use serverTimestamp for consistent timestamps
       });
 
       alert("Registrasi guru berhasil! Anda akan diarahkan ke halaman login.");
@@ -64,6 +64,7 @@ export default function RegisterGuruPage() {
     }
   };
 
+  // Centralized Tailwind CSS classes for reusability and consistency
   const primaryButtonClasses = "bg-orange-500 hover:bg-orange-600 focus:ring-orange-500";
   const primaryTextClasses = "text-orange-600 hover:text-orange-500";
   const primaryInputFocusClasses = "focus:ring-orange-500 focus:border-orange-500";
@@ -184,6 +185,15 @@ export default function RegisterGuruPage() {
               Masuk di sini
             </Link>
           </p>
+
+          <p className="mt-4 text-center text-sm text-gray-600">
+            Atau ingin mendaftar sebagai{" "}
+            <Link href="/auth/register" className={`font-medium ${primaryTextClasses}`}>
+              Murid
+            </Link>
+            ?
+          </p>
+
         </div>
       </div>
     </div>

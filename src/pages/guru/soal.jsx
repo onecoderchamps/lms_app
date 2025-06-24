@@ -279,6 +279,7 @@ export default function InputSoalUjianPage() {
     <MainLayout>
       <main className="flex-1 md:ml-64 md:pt-16 p-4 md:p-6 lg:p-8 bg-gradient-to-br from-slate-50 to-gray-100 min-h-screen mt-15">
         <div className="max-w-full mx-auto bg-white rounded-xl shadow-xl p-6 md:p-8">
+        <div className={`flex flex-col md:flex-row justify-between md:items-center mb-8 gap-4 ${hasMounted ? 'animate-fade-in-up' : 'opacity-0'}`} style={{ animationDelay: '0.1s' }}>
           <div className={`mb-8 ${hasMounted ? "animate-fade-in-up" : "opacity-0"}`}>
             <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Bank Soal Ujian</h1>
             <p className="text-md text-orange-600 font-semibold mt-1">
@@ -295,6 +296,7 @@ export default function InputSoalUjianPage() {
               <PlusCircle size={20} />
               <span>Tambah Soal</span>
             </button>
+          </div>
           </div>
 
           {loading ? (

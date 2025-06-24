@@ -180,7 +180,7 @@ export default function BeriNilaiPage() {
             <p className="text-md text-orange-600 font-semibold mt-1">Untuk Kelas: {activeClass.name}</p>
           </div>
 
-          <div className={`grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-8 p-5 bg-gray-50 rounded-lg shadow-sm border border-gray-200 ${hasMounted ? 'animate-fade-in-up' : 'opacity-0'}`} style={{ animationDelay: '0.2s' }}>
+          <div className={`grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-8 p-5 bg-white rounded-lg shadow-sm border border-gray-200 ${hasMounted ? 'animate-fade-in-up' : 'opacity-0'}`} style={{ animationDelay: '0.2s' }}>
             <div>
               <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-1">Cari Nama</label>
               <input type="text" id="search" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
