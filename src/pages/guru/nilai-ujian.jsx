@@ -90,8 +90,23 @@ export default function BeriNilaiUjianPage() {
         setLoadingSubmissions(true);
         const submissionsQuery = query(collection(db, "examSubmissions"), where("ujianId", "==", selectedUjianId), orderBy("submittedAt", "desc"));
         
-        const unsubscribe = onSnapshot(submissionsQuery, (snapshot) => {
-                const fetchedSubmissions = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        const unsubscribe = onSnapshot(submissionsQuery, async (snapshot) => { // async ditambahkan di sini
+                const fetchedSubmissionsPromises = snapshot.docs.map(async (d) => {
+                    const submissionData = d.data();
+                    // Ambil detail murid dari koleksi 'users'
+                    let namaSiswa = 'Nama tidak ditemukan';
+                    if (submissionData.muridId) {
+                        const userDocRef = doc(db, 'users', submissionData.muridId);
+                        const userSnap = await getDoc(userDocRef);
+                        if (userSnap.exists()) {
+                            namaSiswa = userSnap.data().namaLengkap || userSnap.data().displayName || namaSiswa;
+                        }
+                    }
+                    return { id: d.id, ...submissionData, namaSiswa }; // Tambahkan namaSiswa ke objek
+                });
+
+                const fetchedSubmissions = await Promise.all(fetchedSubmissionsPromises); // Tunggu semua Promise selesai
+
                 setSubmissions(fetchedSubmissions);
 
                 const initialSkor = {};
@@ -159,7 +174,7 @@ export default function BeriNilaiUjianPage() {
         }
     };
 
-    const primaryButtonColor = "bg-orange-500 hover:bg-orange-600 focus:ring-orange-500 text-white";
+    const primaryButtonColor = "bg-orange-500 text-white hover:bg-orange-600 focus:ring-orange-500";
     const primaryButtonTextColor = "text-white";
     const inputFocusColor = "focus:ring-orange-500 focus:border-orange-500";
 
@@ -229,22 +244,21 @@ export default function BeriNilaiUjianPage() {
                                         submissions.map((sub, index) => (
                                             <tr key={sub.id} className="hover:bg-gray-50/50 transition-colors duration-150">
                                                 <td className="px-5 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{index + 1}.</td>
-                                                <td className="px-5 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{sub.namaSiswa}</td>
+                                                {/* --- PERBAIKAN: Menampilkan namaSiswa --- */}
+                                                <td className="px-5 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{sub.namaSiswa || sub.muridId}</td> {/* Fallback ke muridId jika namaSiswa belum ada */}
                                                 <td className="px-5 py-4 whitespace-nowrap text-sm text-center font-semibold text-gray-700">{sub.score || 0}</td>
                                                 <td className="px-5 py-4 whitespace-nowrap text-sm">
                                                     <input 
                                                         type="number" 
                                                         min="0" 
-                                                        // Menggunakan 0 sebagai default jika undefined atau null, tapi mempertahankan '' untuk input kosong
                                                         value={skorTambahan[sub.id] === undefined ? '' : skorTambahan[sub.id]} 
                                                         onChange={(e) => handleSkorTambahanChange(sub.id, e.target.value)}
                                                         className={`w-24 border border-gray-300 rounded-md px-2 py-1.5 text-center focus:ring-orange-500 focus:border-orange-500`} 
                                                         placeholder="0" 
-                                                        disabled={isSubmitting[sub.id] || false} // Hanya disabled saat proses submit
+                                                        disabled={isSubmitting[sub.id] || false} 
                                                     />
                                                 </td>
                                                 <td className="px-5 py-4 whitespace-nowrap text-sm text-center font-bold text-orange-600">
-                                                    {/* --- PERBAIKAN: Konversi eksplisit ke Number untuk nilai yang ditampilkan --- */}
                                                     {Math.min(100, (sub.score || 0) + (Number(skorTambahan[sub.id]) || 0))}
                                                 </td>
                                                 <td className="px-5 py-4 whitespace-nowrap text-center text-sm font-medium">
@@ -256,16 +270,13 @@ export default function BeriNilaiUjianPage() {
                                                         >
                                                             <Eye size={16}/> Lihat
                                                         </button>
-                                                        {/* Tombol Simpan per murid */}
-                                                        {/* --- PERBAIKAN: Tombol Simpan akan dinamis warnanya dan status disabled --- */}
                                                         <button 
                                                             onClick={() => handleSimpanNilaiPerMurid(sub)} 
                                                             disabled={isSubmitting[sub.id] || false} 
-                                                            // Menggunakan kelas dinamis yang sudah dihitung
                                                             className={`flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg shadow-md text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                                                                (Number(skorTambahan[sub.id]) || 0) !== (Number(originalSkorTambahan[sub.id]) || 0) // Cek jika ada perubahan
-                                                                ? primaryButtonColor // Warna oranye jika ada perubahan
-                                                                : "bg-gray-200 text-gray-800 hover:bg-gray-300" // Warna abu-abu jika tidak ada perubahan
+                                                                (Number(skorTambahan[sub.id]) || 0) !== (Number(originalSkorTambahan[sub.id]) || 0) 
+                                                                ? primaryButtonColor 
+                                                                : "bg-gray-200 text-gray-800 hover:bg-gray-300" 
                                                             }`} 
                                                             aria-label="Simpan Nilai"
                                                         >

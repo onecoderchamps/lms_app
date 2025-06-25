@@ -42,11 +42,6 @@ const menuItems = [
             path: "/admin/manajemenkelas",
             icon: <BookCopy size={20} />,
         },
-        {
-            name: "Pengaturan Sistem",
-            path: "/admin/pengaturansistem",
-            icon: <Settings size={20} />,
-        },
       ]
     }
 ];
@@ -74,6 +69,7 @@ export default function SidebarAdmin() {
         {menuItems.map((section) => (
           <div key={section.section}>
             <div className="px-3 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">
+            
               {section.section}
             </div>
             <div className="flex flex-col space-y-0.5">

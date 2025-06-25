@@ -151,8 +151,7 @@ export default function MateriMuridPage() {
                         <span>Dibuat: {materi.createdAt?.toDate().toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}</span>
                     </div>
                     <div className="mt-auto pt-2 border-t border-gray-100">
-                      <span className="flex items-center text-orange-600 hover:text-orange-700 font-medium text-sm transition duration-150">
-                        <ExternalLink size={16} className="mr-1.5" />
+                      <span className="flex-1 text-center text-xs font-medium text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-2 py-1.5 rounded-md transition duration-150">
                         Lihat Materi
                       </span>
                     </div>
