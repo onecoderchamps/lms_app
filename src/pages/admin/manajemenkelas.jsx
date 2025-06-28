@@ -145,7 +145,7 @@ export default function ManajemenKelasPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.namaKelas || !formData.keterangan || !formData.guruId) {
-      showNotification("Semua field wajib diisi.", "error"); // -- DIUBAH: alert() ke notifikasi
+      showNotification("Semua field wajib diisi.", "error"); // -- alert() ke notifikasi
       return;
     }
 
@@ -158,18 +158,18 @@ export default function ManajemenKelasPage() {
           keterangan: formData.keterangan,
           guruId: formData.guruId,
         });
-        showNotification("Data kelas berhasil diperbarui."); // -- DIUBAH: alert() ke notifikasi
+        showNotification("Data kelas berhasil diperbarui."); // -- alert() ke notifikasi
       } else {
         await addDoc(collection(db, 'kelas'), {
           ...formData,
           createdAt: serverTimestamp(),
         });
-        showNotification("Kelas baru berhasil dibuat."); // -- DIUBAH: alert() ke notifikasi
+        showNotification("Kelas baru berhasil dibuat."); // -- alert() ke notifikasi
       }
       setShowModal(false);
     } catch (error) {
       console.error("Gagal menyimpan kelas:", error);
-      showNotification(`Terjadi kesalahan: ${error.message}`, "error"); // -- DIUBAH: alert() ke notifikasi
+      showNotification(`Terjadi kesalahan: ${error.message}`, "error"); // -- alert() ke notifikasi
     } finally {
       setIsSubmitting(false);
     }

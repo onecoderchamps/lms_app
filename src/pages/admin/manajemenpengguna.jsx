@@ -97,7 +97,7 @@ export default function ManajemenPenggunaPage() {
       setLoading(false);
     }, (error) => {
       console.error("Gagal mengambil data pengguna:", error);
-      showNotification("Gagal memuat data pengguna.", "error"); // -- DIUBAH: alert() ke notifikasi
+      showNotification("Gagal memuat data pengguna.", "error");
       setLoading(false);
     });
     return () => unsubscribe();
@@ -130,33 +130,30 @@ export default function ManajemenPenggunaPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.namaLengkap || !formData.email) {
-      showNotification("Nama dan Email wajib diisi.", "error"); // -- DIUBAH
+      showNotification("Nama dan Email wajib diisi.", "error");
       return;
     }
     if (!isEditing && !formData.password) {
-      showNotification("Password wajib diisi untuk pengguna baru.", "error"); // -- DIUBAH
+      showNotification("Password wajib diisi untuk pengguna baru.", "error");
       return;
     }
 
     setIsSubmitting(true);
     try {
-        if (isEditing) {
+        if (isEditing) {  
             const userRef = doc(db, "users", currentUser.id);
             await updateDoc(userRef, {
                 namaLengkap: formData.namaLengkap,
                 role: formData.role,
             });
-            showNotification("Data pengguna berhasil diperbarui."); // -- DIUBAH
+            showNotification("Data pengguna berhasil diperbarui.");
         } else {
-            // Catatan Keamanan: Pembuatan pengguna seharusnya melalui backend (Cloud Function)
-            // untuk membuat akun di Firebase Authentication dan menyimpan data di Firestore.
-            // Kode di client-side hanya sebagai simulasi.
-            showNotification("Simulasi berhasil: Fitur ini memerlukan backend.", "success"); // -- DIUBAH
+            showNotification("Simulasi berhasil: Fitur ini memerlukan backend.", "success");
         }
         setShowModal(false);
     } catch (error) {
         console.error("Gagal menyimpan pengguna:", error);
-        showNotification(`Terjadi kesalahan: ${error.message}`, "error"); // -- DIUBAH
+        showNotification(`Terjadi kesalahan: ${error.message}`, "error");
     } finally {
         setIsSubmitting(false);
     }

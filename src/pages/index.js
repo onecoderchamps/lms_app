@@ -20,7 +20,7 @@ import {
   ListChecks,
 } from "lucide-react";
 
-// Komponen untuk kartu Benefit
+// Komponen untuk kartu Benefit (tetap sama)
 const BenefitCard = ({ icon, title, description }) => (
   <div className="flex items-start space-x-4">
     <div className="flex-shrink-0 bg-orange-100 text-orange-600 w-12 h-12 rounded-lg flex items-center justify-center">
@@ -33,24 +33,32 @@ const BenefitCard = ({ icon, title, description }) => (
   </div>
 );
 
-// Komponen untuk kartu Mentor
+// Komponen untuk kartu Mentor (Tidak digunakan lagi di section mentors, tapi definisinya saya biarkan jika dipakai di tempat lain)
 const MentorCard = ({ name, role, avatarUrl }) => (
-  <div className="text-center">
-    <div className="relative inline-block">
+  // Ini adalah versi terakhir MentorCard dengan efek terangkat dan ikon Briefcase
+  // Jika Anda tidak menggunakannya di tempat lain, Anda bisa menghapus definisi ini.
+  <div className="bg-white rounded-2xl shadow-lg relative overflow-hidden text-center max-w-[300px] mx-auto">
+    <div className="bg-orange-500 h-40 rounded-t-2xl flex items-end justify-center pt-4">
       <img
         src={avatarUrl}
         alt={`Foto ${name}`}
-        className="w-48 h-48 rounded-2xl object-cover shadow-lg mx-auto"
+        className="w-[180px] h-[180px] rounded-2xl object-cover shadow-lg border-4 border-white transform translate-y-12"
       />
-      <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 bg-white px-4 py-1 rounded-full shadow-md text-sm font-semibold text-slate-700">
+    </div>
+    <div className="pt-[70px] pb-6 px-4">
+      <h3 className="text-xl font-bold text-slate-900 whitespace-nowrap overflow-hidden text-ellipsis">
         {name}
+      </h3>
+      <div className="flex items-center justify-center mt-2 text-slate-600 text-sm">
+        <Briefcase size={16} className="mr-1 text-slate-500" />
+        <p>{role}</p>
       </div>
     </div>
-    <p className="mt-6 text-orange-600 font-medium">{role}</p>
   </div>
 );
 
-// Komponen untuk kartu Testimoni Murid
+
+// Komponen untuk kartu Testimoni Murid (tetap sama)
 const StudentTestimonialCard = ({ quote, name, role, avatarUrl }) => (
   <div className="bg-white p-6 rounded-2xl shadow-lg border border-slate-100">
     <p className="text-slate-600 text-sm">"{quote}"</p>
@@ -71,7 +79,7 @@ const StudentTestimonialCard = ({ quote, name, role, avatarUrl }) => (
 export default function LandingPage() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
-  // Fungsi untuk smooth scroll
+  // Fungsi untuk smooth scroll (tetap sama)
   const handleSmoothScroll = (e) => {
     e.preventDefault();
     const targetId = e.currentTarget.getAttribute("href").substring(1);
@@ -95,7 +103,7 @@ export default function LandingPage() {
       </Head>
 
       <div className="bg-white text-slate-800 font-sans">
-        {/* Header / Navigasi */}
+        {/* Header / Navigasi (tetap sama) */}
         <header className="bg-white/95 backdrop-blur-lg fixed top-0 left-0 right-0 z-50">
           <div className="container mx-auto px-6 py-4 flex justify-between items-center">
             <Link href="/" className="flex items-center space-x-2">
@@ -217,7 +225,7 @@ export default function LandingPage() {
         </header>
 
         <main>
-          {/* Hero Section */}
+          {/* Hero Section (tetap sama) */}
           <section id="home" className="pt-32 pb-20 md:pt-40 md:pb-28">
             <div className="container mx-auto px-6">
               <div className="grid md:grid-cols-2 gap-10 items-center">
@@ -242,7 +250,7 @@ export default function LandingPage() {
                   <img
                     src="/gambar1.png"
                     alt="Siswa memegang buku"
-                    className="  mx-auto"
+                    className="mx-auto"
                   />
                   <div className="absolute -bottom-8 -left-8 w-32 h-32 bg-orange-100 rounded-3xl -z-10"></div>
                 </div>
@@ -250,7 +258,7 @@ export default function LandingPage() {
             </div>
           </section>
 
-          {/* Why CoderChamps Different? */}
+          {/* Why CoderChamps Different? (tetap sama) */}
           <section
             id="benefits"
             className="relative py-20 md:py-28 overflow-hidden"
@@ -263,12 +271,11 @@ export default function LandingPage() {
                 background-image: url("/latar.png");
                 background-size: cover;
                 background-position: center;
-                opacity: 0.3; 
+                opacity: 0.3;
                 z-index: 0;
               }
             `}</style>
 
-            
             <div className="container mx-auto px-6 text-center relative z-10">
               <div className="max-w-3xl mx-auto">
                 <h2 className="text-3xl md:text-4xl font-bold text-slate-900">
@@ -311,28 +318,31 @@ export default function LandingPage() {
             </div>
           </section>
 
-         
+          {/* Section Mentor (Direvisi untuk menampilkan gambar langsung) */}
           <section id="mentors" className="py-20 md:py-28">
             <div className="container mx-auto px-6 text-center">
               <h2 className="text-3xl md:text-4xl font-bold text-slate-900">
                 Mentor Profesional Kami
               </h2>
-              <div className="grid sm:grid-cols-2 lg:grid-cols-2 gap-y-20 gap-x-8 mt-20">
-                <MentorCard
-                  name="Hilyatul Wahid"
-                  role="Mentor Fullstack"
-                  avatarUrl="https://placehold.co/200x200/2D3748/FFFFFF?text=HW"
+              
+              <div className="grid sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-x-8 gap-y-8 justify-center items-center mt-20 max-w-4xl mx-auto">
+                <img
+                  src="/mentor 1.png" // Path ke gambar mentor pertama
+                  alt="Hilyatul Wahid"
+                  className="w-full h-auto object-contain rounded-xl shadow-lg" // Gaya untuk gambar individual
                 />
-                <MentorCard
-                  name="Naufal Ash Siddiq"
-                  role="Mentor Frontend"
-                  avatarUrl="https://placehold.co/200x200/2D3748/FFFFFF?text=NS"
+                <img
+                  src="/mentor 2.png" // Path ke gambar mentor kedua
+                  alt="Naufal Ash Siddiq"
+                  className="w-full h-auto object-contain rounded-xl shadow-lg" // Gaya untuk gambar individual
                 />
               </div>
+              
+
             </div>
           </section>
 
-          
+          {/* Testimonial Section (tetap sama) */}
           <section id="testimonials" className="py-20 md:py-28 bg-slate-50">
             <div className="container mx-auto px-6">
               <div className="text-center max-w-2xl mx-auto">
@@ -370,7 +380,7 @@ export default function LandingPage() {
           </section>
         </main>
 
-        {/* Footer */}
+        {/* Footer (tetap sama) */}
         <footer className="bg-white text-slate-500 border-t">
           <div className="container mx-auto px-6 py-12">
             <div className="grid md:grid-cols-12 gap-8">
