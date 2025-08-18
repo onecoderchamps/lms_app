@@ -18,6 +18,10 @@ import {
   Star,
   Edit,
   ListChecks,
+  Gamepad2,
+  Pencil,
+  UserCheck,
+  Laptop,
 } from "lucide-react";
 
 // Komponen untuk kartu Benefit (tetap sama)
@@ -33,10 +37,38 @@ const BenefitCard = ({ icon, title, description }) => (
   </div>
 );
 
-// Komponen untuk kartu Mentor (Tidak digunakan lagi di section mentors, tapi definisinya saya biarkan jika dipakai di tempat lain)
+// Komponen untuk kartu Proses Pendaftaran (tetap sama)
+const ProcessCard = ({ number, icon, title, description }) => (
+  <div className="bg-white p-6 rounded-2xl shadow-lg border border-slate-100 text-center">
+    <div className="flex items-center justify-center mb-4">
+      <div className="flex-shrink-0 bg-orange-100 text-orange-600 w-16 h-16 rounded-full flex items-center justify-center">
+        {icon}
+      </div>
+    </div>
+    <div className="bg-orange-500 text-white w-8 h-8 rounded-full flex items-center justify-center mx-auto -mt-10 mb-6 border-4 border-white font-bold text-sm">
+      {number}
+    </div>
+    <h3 className="text-xl font-bold text-slate-800">{title}</h3>
+    <p className="mt-2 text-slate-500 text-sm">{description}</p>
+  </div>
+);
+
+// Komponen untuk kartu Kelas (tetap sama)
+const ProgramCard = ({ icon, title, description }) => (
+  <div className="bg-white p-6 rounded-2xl shadow-md border border-slate-100 transform hover:scale-105 transition-transform duration-300">
+    <div className="bg-orange-100 text-orange-600 w-14 h-14 rounded-full flex items-center justify-center mb-4">
+      {icon}
+    </div>
+    <h3 className="text-xl font-bold text-slate-800">{title}</h3>
+    <p className="mt-2 text-slate-500 text-sm">{description}</p>
+    <a href="/auth/register" className="mt-4 inline-block text-orange-500 font-semibold text-sm">
+      Daftar Sekarang &rarr;
+    </a>
+  </div>
+);
+
+// Komponen untuk kartu Mentor (Tidak digunakan lagi)
 const MentorCard = ({ name, role, avatarUrl }) => (
-  // Ini adalah versi terakhir MentorCard dengan efek terangkat dan ikon Briefcase
-  // Jika Anda tidak menggunakannya di tempat lain, Anda bisa menghapus definisi ini.
   <div className="bg-white rounded-2xl shadow-lg relative overflow-hidden text-center max-w-[300px] mx-auto">
     <div className="bg-orange-500 h-40 rounded-t-2xl flex items-end justify-center pt-4">
       <img
@@ -128,6 +160,20 @@ export default function LandingPage() {
                 Beranda
               </a>
               <a
+                href="#programs"
+                onClick={handleSmoothScroll}
+                className="text-slate-700 hover:text-orange-600 font-medium transition-colors"
+              >
+                Kelas
+              </a>
+              <a
+                href="#process"
+                onClick={handleSmoothScroll}
+                className="text-slate-700 hover:text-orange-600 font-medium transition-colors"
+              >
+                Proses
+              </a>
+              <a
                 href="#benefits"
                 onClick={handleSmoothScroll}
                 className="text-slate-700 hover:text-orange-600 font-medium transition-colors"
@@ -186,6 +232,20 @@ export default function LandingPage() {
                 Beranda
               </a>
               <a
+                href="#programs"
+                onClick={handleSmoothScroll}
+                className="block text-slate-700 hover:text-orange-600 font-medium py-2"
+              >
+                Kelas
+              </a>
+              <a
+                href="#process"
+                onClick={handleSmoothScroll}
+                className="block text-slate-700 hover:text-orange-600 font-medium py-2"
+              >
+                Proses
+              </a>
+              <a
                 href="#benefits"
                 onClick={handleSmoothScroll}
                 className="block text-slate-700 hover:text-orange-600 font-medium py-2"
@@ -225,7 +285,7 @@ export default function LandingPage() {
         </header>
 
         <main>
-          {/* Hero Section (tetap sama) */}
+          {/* Hero Section */}
           <section id="home" className="pt-32 pb-20 md:pt-40 md:pb-28">
             <div className="container mx-auto px-6">
               <div className="grid md:grid-cols-2 gap-10 items-center">
@@ -258,7 +318,99 @@ export default function LandingPage() {
             </div>
           </section>
 
-          {/* Why CoderChamps Different? (tetap sama) */}
+          {/* BAGIAN: DAFTAR KELAS */}
+          <section id="programs" className="py-20 md:py-28 bg-slate-50">
+            <div className="container mx-auto px-6 text-center">
+              <div className="max-w-3xl mx-auto">
+                <h2 className="text-3xl md:text-4xl font-bold text-slate-900">
+                  Pilihan Kelas Unggulan Kami
+                </h2>
+                <p className="mt-4 text-slate-600">
+                  Temukan jalur karir yang sesuai dengan minat dan passion Anda
+                  melalui program intensif kami yang didesain untuk kesuksesan
+                  industri.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mt-16">
+                <ProgramCard
+                  icon={<ListChecks size={36} />}
+                  title="Fullstack Developer"
+                  description="Kuasai pengembangan front-end dan back-end untuk membangun aplikasi web yang lengkap dan fungsional."
+                />
+                <ProgramCard
+                  icon={<Gamepad2 size={36} />}
+                  title="Game Developer"
+                  description="Wujudkan ide game Anda menjadi kenyataan, dari konsep, desain, hingga implementasi."
+                />
+                <ProgramCard
+                  icon={<BarChart2 size={36} />}
+                  title="AI & Data Science"
+                  description="Pelajari machine learning dan analisis data untuk memecahkan masalah kompleks dan membuat keputusan berbasis data."
+                />
+                <ProgramCard
+                  icon={<Edit size={36} />}
+                  title="Content Creator"
+                  description="Bangun personal branding Anda dan buat konten digital yang menarik dan berkualitas tinggi."
+                />
+              </div>
+            </div>
+          </section>
+
+          {/* BAGIAN: PROSES BOOTCAMP */}
+          <section id="process" className="py-20 md:py-28">
+            <div className="container mx-auto px-6 text-center">
+              <div className="max-w-3xl mx-auto">
+                <h2 className="text-3xl md:text-4xl font-bold text-slate-900">
+                  Proses Bootcamp yang Mudah
+                </h2>
+                <p className="mt-4 text-slate-600">
+                  Berikut adalah tahapan yang akan Anda ikuti untuk memulai
+                  karir profesional di bidang teknologi bersama kami.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-16 max-w-5xl mx-auto">
+                <ProcessCard
+                  number="1"
+                  icon={<Pencil size={36} />}
+                  title="Pendaftaran & Seleksi"
+                  description="Pilih program, lengkapi formulir, dan ikuti seleksi administrasi untuk memverifikasi data Anda."
+                />
+                <ProcessCard
+                  number="2"
+                  icon={<UserCheck size={36} />}
+                  title="Pembelajaran Intensif"
+                  description="Dapatkan pelatihan coding dan softskill secara intensif, online maupun offline."
+                />
+                <ProcessCard
+                  number="3"
+                  icon={<Laptop size={36} />}
+                  title="Penyaluran Kerja"
+                  description="Setelah lulus, Anda akan langsung disalurkan ke mitra perusahaan kami untuk memulai karir."
+                />
+              </div>
+              <div className="mt-16 text-center space-y-4">
+                <p className="text-slate-600 text-lg font-semibold">
+                  Sebelum mendaftar, mohon baca Syarat & Ketentuan.
+                </p>
+                <div className="flex justify-center space-x-4">
+                  <a
+                    href="#"
+                    className="bg-orange-500 text-white px-6 py-3 rounded-lg text-base font-semibold hover:bg-orange-600 shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300"
+                  >
+                    Baca FAQ
+                  </a>
+                  <a
+                    href="/auth/register"
+                    className="border border-orange-500 text-orange-600 px-6 py-3 rounded-lg text-base font-semibold hover:bg-orange-50 hover:shadow-md transition-all duration-300"
+                  >
+                    Daftar Sekarang
+                  </a>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Why CoderChamps Different? */}
           <section
             id="benefits"
             className="relative py-20 md:py-28 overflow-hidden"
@@ -318,7 +470,7 @@ export default function LandingPage() {
             </div>
           </section>
 
-          {/* Section Mentor (Direvisi untuk menampilkan gambar langsung) */}
+          {/* Section Mentor */}
           <section id="mentors" className="py-20 md:py-28">
             <div className="container mx-auto px-6 text-center">
               <h2 className="text-3xl md:text-4xl font-bold text-slate-900">
@@ -327,22 +479,21 @@ export default function LandingPage() {
               
               <div className="grid sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-x-8 gap-y-8 justify-center items-center mt-20 max-w-4xl mx-auto">
                 <img
-                  src="/mentor 1.png" // Path ke gambar mentor pertama
+                  src="/mentor 1.png"
                   alt="Hilyatul Wahid"
-                  className="w-full h-auto object-contain rounded-xl shadow-lg" // Gaya untuk gambar individual
+                  className="w-full h-auto object-contain rounded-xl shadow-lg"
                 />
                 <img
-                  src="/mentor 2.png" // Path ke gambar mentor kedua
+                  src="/mentor 2.png"
                   alt="Naufal Ash Siddiq"
-                  className="w-full h-auto object-contain rounded-xl shadow-lg" // Gaya untuk gambar individual
+                  className="w-full h-auto object-contain rounded-xl shadow-lg"
                 />
               </div>
               
-
             </div>
           </section>
 
-          {/* Testimonial Section (tetap sama) */}
+          {/* Testimonial Section */}
           <section id="testimonials" className="py-20 md:py-28 bg-slate-50">
             <div className="container mx-auto px-6">
               <div className="text-center max-w-2xl mx-auto">
@@ -353,25 +504,25 @@ export default function LandingPage() {
               <div className="grid md:grid-cols-2 gap-8 mt-16 max-w-5xl mx-auto">
                 <StudentTestimonialCard
                   quote="Materinya sangat relevan dengan industri saat ini. Saya merasa jauh lebih siap untuk terjun ke dunia kerja setelah mengikuti bootcamp di sini."
-                  name="Andi Pratama"
+                  name="Arsalim is Maulana"
                   role="Fullstack Developer"
-                  avatarUrl="https://i.pravatar.cc/150?u=andi"
+                  avatarUrl="https://www.ganto.co/photos/berita/190817073639_pengalaman-hebat-adalah.jpeg"
                 />
                 <StudentTestimonialCard
                   quote="Mentor-mentornya sangat sabar dan suportif. Mereka tidak hanya mengajar, tetapi juga membimbing. Komunitasnya juga sangat aktif!"
-                  name="Siti Nurhaliza"
+                  name="Nafsan Ahmad"
                   role="UI/UX Designer"
                   avatarUrl="https://i.pravatar.cc/150?u=siti"
                 />
                 <StudentTestimonialCard
                   quote="Kurikulumnya terstruktur dengan baik. Dari yang tidak tahu apa-apa tentang coding, sekarang saya percaya diri membangun aplikasi sendiri."
-                  name="Rian Hidayat"
+                  name="Dedy Prasteyo"
                   role="Mobile Developer"
-                  avatarUrl="https://i.pravatar.cc/150?u=rian"
+                  avatarUrl="https://i1.rgstatic.net/ii/profile.image/751813678600192-1556257757049_Q512/Dedy-Hermawan-2.jpg"
                 />
                 <StudentTestimonialCard
                   quote="Pelatihan soft skill-nya sangat berguna. Saya belajar banyak tentang cara membuat CV dan menghadapi wawancara kerja. Benar-benar paket lengkap!"
-                  name="Dewi Anjani"
+                  name="Dewi Arsina"
                   role="Data Scientist"
                   avatarUrl="https://i.pravatar.cc/150?u=dewi"
                 />
@@ -380,7 +531,7 @@ export default function LandingPage() {
           </section>
         </main>
 
-        {/* Footer (tetap sama) */}
+        {/* Footer */}
         <footer className="bg-white text-slate-500 border-t">
           <div className="container mx-auto px-6 py-12">
             <div className="grid md:grid-cols-12 gap-8">
@@ -416,6 +567,24 @@ export default function LandingPage() {
                   </li>
                   <li>
                     <a
+                      href="#programs"
+                      onClick={handleSmoothScroll}
+                      className="hover:text-orange-600"
+                    >
+                      Kelas
+                    </a>
+                  </li>
+                  <li>
+                    <a
+                      href="#process"
+                      onClick={handleSmoothScroll}
+                      className="hover:text-orange-600"
+                    >
+                      Proses
+                    </a>
+                  </li>
+                  <li>
+                    <a
                       href="#benefits"
                       onClick={handleSmoothScroll}
                       className="hover:text-orange-600"
@@ -439,17 +608,16 @@ export default function LandingPage() {
                 <ul className="mt-4 space-y-3 text-sm">
                   <li className="flex items-start">
                     <Mail size={16} className="mr-3 mt-1 flex-shrink-0" />
-                    <span>lembagalmsindonesia@gmail.com</span>
+                    <span>admin@coderchamps.co.id</span>
                   </li>
                   <li className="flex items-start">
                     <Phone size={16} className="mr-3 mt-1 flex-shrink-0" />
-                    <span>(62) 851-5992-2325</span>
+                    <span>(62) 81310531713</span>
                   </li>
                   <li className="flex items-start">
                     <MapPin size={16} className="mr-3 mt-1 flex-shrink-0" />
                     <span>
-                      Jl. Margonda Pondok Indah No. 73A kelurahan, Jawa Barat
-                      16424
+                      Jl. Smapal No.9, Lengkong Gudang, Kec. Serpong, Kota Tangerang Selatan, Banten 15321
                     </span>
                   </li>
                 </ul>
