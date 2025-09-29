@@ -479,11 +479,6 @@ export default function LandingPage() {
               
               <div className="grid sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-x-8 gap-y-8 justify-center items-center mt-20 max-w-4xl mx-auto">
                 <img
-                  src="/mentor 1.png"
-                  alt="Hilyatul Wahid"
-                  className="w-full h-auto object-contain rounded-xl shadow-lg"
-                />
-                <img
                   src="/mentor 2.png"
                   alt="Naufal Ash Siddiq"
                   className="w-full h-auto object-contain rounded-xl shadow-lg"
@@ -612,7 +607,7 @@ export default function LandingPage() {
                   </li>
                   <li className="flex items-start">
                     <Phone size={16} className="mr-3 mt-1 flex-shrink-0" />
-                    <span>(62) 81310531713</span>
+                    <span>(62) 81290196638</span>
                   </li>
                   <li className="flex items-start">
                     <MapPin size={16} className="mr-3 mt-1 flex-shrink-0" />
