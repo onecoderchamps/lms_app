@@ -1,0 +1,102 @@
+[
+  {
+    "imageUrl": "/hilmanzu.jpg",
+    "slug": "digimap",
+    "title": "🔥 Digital Marketing Mastery 2025: Rahasia AI Content & Iklan Closing Otomatis",
+    "date": "12 Oktober 2025",
+    "time": "19.00 WIB",
+    "price": "Rp 75.000",
+    "hero": {
+      "badge": "LIVE ONLINE • Seat Hanya 100 Peserta",
+      "subtitle": "Belajar Strategi Paling Update dengan AI Integrated Marketing"
+    },
+    "features": [
+      {
+        "title": "🚀 Produksi Konten AI",
+        "desc": "Bikin 30+ konten siap posting hanya dalam 1 jam."
+      },
+      {
+        "title": "🎯 Google & Meta Ads",
+        "desc": "Trik optimasi supaya biaya iklan makin kecil, closing makin besar."
+      },
+      {
+        "title": "💡 Funnel Closing",
+        "desc": "Bangun jalur penjualan dari awareness → loyal → repeat order."
+      },
+      {
+        "title": "🖥️ Landing Page",
+        "desc": "Dapatkan template + copywriting yang proven untuk konversi."
+      }
+    ],
+    "problems": [
+      "Konten udah banyak tapi tetap sepi engagement.",
+      "Iklan jalan, tapi boncos dan nggak balik modal.",
+      "Pusing bikin strategi marketing dari nol.",
+      "Belum punya funnel penjualan yang jelas."
+    ],
+    "benefits": [
+      {
+        "title": "📌 Mindset & Urgensi",
+        "desc": "Kenapa digital marketing wajib dikuasai untuk bisnis masa kini."
+      },
+      {
+        "title": "🤖 AI Digital Marketing Plan",
+        "desc": "Strategi jangka panjang dengan bantuan AI & prompt siap pakai."
+      },
+      {
+        "title": "📝 AI Content Plan",
+        "desc": "Cara bikin kalender konten harian sampai bulanan dalam hitungan menit."
+      },
+      {
+        "title": "🔑 Fundamental Marketing",
+        "desc": "Fondasi penting supaya strategi AI & iklan kamu nggak sia-sia."
+      },
+      {
+        "title": "💸 Budgeting Iklan",
+        "desc": "Belajar cara alokasi iklan biar efektif tanpa boncos."
+      },
+      {
+        "title": "⚡ Impactful AI Content",
+        "desc": "Rahasia bikin konten yang engage + closing."
+      }
+    ],
+    "agenda": [
+      "🔥 Kenapa bisnis gagal tanpa digital marketing",
+      "🚀 Bagaimana AI mengubah cara kerja digital marketing",
+      "🎯 Step by step Google & Meta Ads yang efektif",
+      "🖊️ Landing Page & Copywriting yang proven",
+      "❓ Live Q&A + Studi Kasus Real Peserta"
+    ],
+    "testimonials": [
+      {
+        "quote": "Webinar ini bikin saya hemat biaya iklan sampai 40%, mantap!",
+        "author": "Hamzah Alma, UMKM Elektronik"
+      },
+      {
+        "quote": "Praktis banget, ada banyak template & workflow yang tinggal dipakai.",
+        "author": "Arsalim Maulana, Freelancer"
+      },
+      {
+        "quote": "Coach Hilman ngajarnya gampang dicerna, langsung bisa praktek.",
+        "author": "Alqodri Ahmad, Jual Beli Mobil"
+      }
+    ],
+    "footer": {
+      "email": "admin@coderchamps.co.id",
+      "brand": "coderchamps"
+    },
+    "mentor": {
+      "name": "Coach Hilman",
+      "title": "AI Programmer & Google Ads Specialist",
+      "profile": "Lebih dari 5 tahun membantu UMKM & bisnis internasional meningkatkan performa online dengan kombinasi AI + Digital Marketing.",
+      "career": [
+        "🚀 Menaikkan penjualan emas abigold.co.id 200% (2025, Indonesia).",
+        "📈 Meningkatkan traffic organik karcisbola.com 150% (2020-2023).",
+        "🎬 Meluncurkan kampanye digital Film Riki Rhino → 1 juta penonton (2020-2023).",
+        "🤖 AI Digital Strategy di mymarsupium.com (2024-2025, Australia).",
+        "📊 AI Data Science di decodata.com.au (2024, Australia)."
+      ],
+      "avatarUrl": "/hilmanzu.jpg"
+    }
+  }
+]

@@ -22,7 +22,12 @@ import {
   Pencil,
   UserCheck,
   Laptop,
+  Calendar,
+  Clock,
+  Tag,
+  ArrowRight,
 } from "lucide-react";
+import webinars from "../data/webinar";
 
 // Komponen untuk kartu Benefit (tetap sama)
 const BenefitCard = ({ icon, title, description }) => (
@@ -476,7 +481,7 @@ export default function LandingPage() {
               <h2 className="text-3xl md:text-4xl font-bold text-slate-900">
                 Mentor Profesional Kami
               </h2>
-              
+
               <div className="grid sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-x-8 gap-y-8 justify-center items-center mt-20 max-w-4xl mx-auto">
                 <img
                   src="/mentor 2.png"
@@ -484,9 +489,80 @@ export default function LandingPage() {
                   className="w-full h-auto object-contain rounded-xl shadow-lg"
                 />
               </div>
-              
+
             </div>
           </section>
+
+          <main className="bg-gray-900 min-h-screen">
+            <div className="max-w-6xl mx-auto p-6 md:p-10">
+              {/* UBAH: Judul diubah menjadi putih dengan garis bawah oranye */}
+              <h1 className="text-4xl font-extrabold text-white mb-12 border-b-2 border-orange-500 pb-4">
+                Jadwal Webinar Eksklusif
+              </h1>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                {webinars.map((w) => (
+                  <article
+                    key={w.slug}
+                    // UBAH: Efek hover ditingkatkan dengan ring oranye
+                    className="group block bg-white rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1 hover:ring-2 hover:ring-orange-500"
+                  >
+                    <Link href={`/webinar/${w.slug}`}>
+                      {/* Bagian Gambar */}
+                      <div className="relative h-48 w-full overflow-hidden">
+                        <img
+                          src={w.imageUrl || 'https://via.placeholder.com/600x400?text=Webinar+Cover'}
+                          alt={`Cover Webinar: ${w.title}`}
+                          // Gunakan 'fill' dan 'object-cover' jika menggunakan Next/Image
+                          className="rounded-xl absolute h-full w-full object-cover group-hover:scale-[1.05] transition-transform duration-500 ease-in-out"
+                        />
+                        {/* UBAH: Overlay diubah menjadi hitam/oranye yang lebih subtle */}
+                        <div className="absolute inset-0 bg-black/10 group-hover:bg-black/20 transition-all"></div>
+                      </div>
+
+                      {/* Bagian Detail */}
+                      <div className="p-6 flex flex-col h-[calc(100%-12rem)]"> {/* 12rem = h-48 */}
+                        <div className="flex-grow">
+                          {/* UBAH: Judul saat hover menjadi oranye */}
+                          <h2 className="text-2xl font-bold text-gray-900 group-hover:text-orange-600 transition-colors duration-300 leading-snug">
+                            {w.title}
+                          </h2>
+                          <p className="text-gray-600 mt-2 text-sm line-clamp-2">
+                            {w.hero.subtitle}
+                          </p>
+                        </div>
+
+                        {/* Detail Info */}
+                        <div className="mt-4 pt-4 border-t border-gray-100 space-y-2">
+                          <div className="flex items-center text-gray-700 text-sm">
+                            {/* UBAH: Ikon menggunakan warna oranye */}
+                            <Calendar className="w-4 h-4 text-orange-500 mr-2 flex-shrink-0" />
+                            <span>{w.date}</span>
+                          </div>
+                          <div className="flex items-center text-gray-700 text-sm">
+                            {/* UBAH: Ikon menggunakan warna oranye */}
+                            <Clock className="w-4 h-4 text-orange-500 mr-2 flex-shrink-0" />
+                            <span>{w.time}</span>
+                          </div>
+                          {/* UBAH: Harga menggunakan warna oranye yang mencolok */}
+                          <div className="flex items-center text-lg font-bold text-orange-600">
+                            <Tag className="w-5 h-5 mr-2 flex-shrink-0" />
+                            <span>{w.price}</span>
+                          </div>
+                        </div>
+
+                        {/* Tombol Aksi */}
+                        <div className="mt-5 flex items-center text-orange-600 font-semibold group-hover:underline">
+                          Lihat Detail
+                          <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform duration-200" />
+                        </div>
+                      </div>
+                    </Link>
+                  </article>
+                ))}
+              </div>
+            </div>
+          </main>
 
           {/* Testimonial Section */}
           <section id="testimonials" className="py-20 md:py-28 bg-slate-50">
