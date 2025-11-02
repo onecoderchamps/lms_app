@@ -46,7 +46,7 @@ const FloatingWhatsAppButton = ({ phoneNumber, title, date }) => {
       href={whatsappUrl}
       target="_blank"
       rel="noopener noreferrer"
-      className="fixed bottom-6 right-6 z-50 flex h-16 w-16 items-center justify-center rounded-full bg-green-500 text-white shadow-xl transition-transform duration-300 hover:scale-110 hover:bg-green-600"
+      className="fixed bottom-6 right-6 z-50 flex pb-2 pt-2 pl-4 pr-4 items-center justify-center rounded-full bg-green-500 text-white shadow-xl transition-transform duration-300 hover:scale-110 hover:bg-green-600"
       aria-label="Hubungi via WhatsApp"
     >
       DAFTAR SEKARANG
@@ -81,11 +81,23 @@ const TestimonialCard = ({ quote, author, title, avatarUrl }) => (
 export default function WebinarDetail({ webinar }) {
   if (!webinar) return notFound();
 
+  const phoneNumber = "081385285928"; // Ganti dengan nomor WhatsApp Anda
+
+  const formattedPhoneNumber = phoneNumber.startsWith('0') 
+    ? `62${phoneNumber.substring(1)}` 
+    : phoneNumber;
+  
+  // Buat pesan default dan encode untuk URL
+  const message = `Hallo, saya ingin mendaftar webinar "${webinar.title}" yang akan diadakan pada tanggal ${webinar.date}.`;
+  const encodedMessage = encodeURIComponent(message);
+  
+  const whatsappUrl = `https://wa.me/${formattedPhoneNumber}?text=${encodedMessage}`;
+
   // Komponen CTA tunggal di luar Sidebar
   const MainCtaButton = () => (
     <div className="mt-12 text-center">
-        <a href="#" className="inline-block bg-orange-500 text-white font-extrabold text-xl py-4 px-12 rounded-lg shadow-xl hover:bg-orange-600 transition duration-300 transform hover:scale-105">
-            DAFTAR SEKARANG HANYA {webinar.price} &raquo;
+        <a target="_blank" href={whatsappUrl} className="inline-block bg-orange-500 text-white font-extrabold text-xl py-4 px-12 rounded-lg shadow-xl hover:bg-orange-600 transition duration-300 transform hover:scale-105">
+            DAFTAR SEKARANG &raquo;
         </a>
         <p className="text-sm text-gray-400 mt-3">Slot terbatas. Amankan kursi Anda sekarang!</p>
     </div>
@@ -108,7 +120,7 @@ export default function WebinarDetail({ webinar }) {
             <DetailItem Icon={Users} text={`Oleh ${webinar.footer.brand}`} />
           </div>
 
-          <a href="#" className="mt-10 inline-block bg-orange-500 text-white font-extrabold text-lg py-3 px-10 rounded-full shadow-2xl hover:bg-orange-400 transition duration-300 transform hover:scale-105">
+          <a target="_blank" href={whatsappUrl} className="mt-10 inline-block bg-orange-500 text-white font-extrabold text-lg py-3 px-10 rounded-full shadow-2xl hover:bg-orange-400 transition duration-300 transform hover:scale-105">
             DAFTAR SEKARANG &raquo;
           </a>
         </div>
@@ -250,7 +262,7 @@ export default function WebinarDetail({ webinar }) {
       {/* --- BARU: Pemanggilan Komponen Floating WhatsApp Button --- */}
       {/* Tombol ini akan mengambil data dari 'webinar' yang sedang ditampilkan */}
       <FloatingWhatsAppButton 
-        phoneNumber="081310531713" 
+        phoneNumber="081385285928" 
         title={webinar.title} 
         date={webinar.date}
       />

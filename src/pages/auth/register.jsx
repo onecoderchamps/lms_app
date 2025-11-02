@@ -201,13 +201,13 @@ export default function RegistermuridPage() {
           </p>
 
           {/* Link ke halaman Daftar Guru (Tambahan Baru) */}
-          <p className="mt-4 text-center text-sm text-gray-600">
+          {/* <p className="mt-4 text-center text-sm text-gray-600">
             Atau ingin mendaftar sebagai{" "}
             <Link href="/authGuru/register" className={`font-medium ${primaryTextColor} ${primaryTextHoverColor}`}>
               Guru
             </Link>
             ?
-          </p>
+          </p> */}
 
         </div>
       </div>
